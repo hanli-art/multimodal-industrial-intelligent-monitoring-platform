@@ -5,3 +5,5 @@ opencv-python
 pillow
 numpy
 dashscope
+pymysql
+python-dotenv

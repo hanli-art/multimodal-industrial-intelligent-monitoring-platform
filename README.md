@@ -4,7 +4,7 @@
 
 ## 技术栈
 
-- 后端：FastAPI + SQLite（Python 标准库 `sqlite3`）
+- 后端：FastAPI + MySQL（PyMySQL 驱动，原生 SQL，不引入 ORM）
 - 前端：原生 HTML / CSS / JavaScript，图表用 ECharts（CDN 引入）
 - 视频源：本地视频文件 / PC 摄像头
 - AI 能力：YOLOv8m 目标检测 + 通义千问 VL 大模型场景安全分析
@@ -34,9 +34,15 @@ yolo predict model=yolov8m.pt    # 会自动下载权重到当前目录
 
    或手动从 [Ultralytics](https://docs.ultralytics.com/models/yolov8/) 下载 `yolov8m.pt` 后拷贝到项目根目录。
 
-4. 配置千问 API Key（可选，仅 `/ws/qwen` 需要）：
+4. 准备 MySQL 数据库（5.7+），复制 `.env.example` 为 `.env`，填入数据库连接信息（`DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME`）与千问 `DASHSCOPE_API_KEY`。
 
-   复制 `.env.example` 为 `.env`，填入 `DASHSCOPE_API_KEY`；或在系统环境变量中设置同名变量。未配置时服务仍可启动，但 `/ws/qwen` 大模型分析不可用。
+5. 初始化数据库（自动建库、建 6 张表、写入种子数据）：
+
+```bash
+python init_db.py
+```
+
+   未配置 `DASHSCOPE_API_KEY` 时服务仍可启动，但 `/ws/qwen` 大模型分析不可用。
 
 ## 启动
 
