@@ -111,6 +111,29 @@ def seed_users():
         print(f'[seed] 已创建演示账号 {username}（{role}）')
 
 
+# R9 系统配置默认值（键名与 server.py 的 CONFIG_DEFAULTS 保持一致）
+DEFAULT_CONFIG = [
+    ('yolo_enabled', '1'),          # YOLO 目标检测总开关
+    ('qwen_enabled', '1'),          # 千问大模型分析总开关
+    ('violation_抽烟', '1'),
+    ('violation_未戴安全帽', '1'),
+    ('violation_打架斗殴', '1'),
+    ('violation_火灾', '1'),
+    ('violation_攀爬围墙', '1'),
+    ('yolo_conf', '0.5'),           # YOLO 置信度阈值 0.3~0.9
+    ('alarm_debounce', '30'),       # 同类型告警防抖秒数
+]
+
+
+def seed_config():
+    """写入默认配置（幂等，已存在的键不覆盖，保护用户改动）"""
+    for key, value in DEFAULT_CONFIG:
+        if db.query('SELECT id FROM config WHERE cfg_key = %s', (key,)):
+            continue
+        db.execute('INSERT INTO config (cfg_key, cfg_value) VALUES (%s, %s)', (key, value))
+        print(f'[seed] 已写入默认配置 {key} = {value}')
+
+
 def seed_devices():
     if db.query('SELECT id FROM devices LIMIT 1'):
         return
@@ -134,6 +157,7 @@ def init():
     migrate_users()
     seed_devices()
     seed_users()
+    seed_config()
 
 
 if __name__ == '__main__':

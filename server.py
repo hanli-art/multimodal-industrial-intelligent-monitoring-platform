@@ -142,9 +142,9 @@ def base64_to_frame(base64_image: str):
 
 
 # ==================== 工具 2：YOLO 检测 ====================
-def run_yolo(frame):
-    """同步函数，跑 YOLO，返回检测结果列表"""
-    results = model.predict(frame, conf=0.5, classes=[0, 2, 7], verbose=False)
+def run_yolo(frame, conf=0.5):
+    """同步函数，跑 YOLO，返回检测结果列表；conf 由系统配置传入，调整后即时生效"""
+    results = model.predict(frame, conf=conf, classes=[0, 2, 7], verbose=False)
 
     detections = []
     if hasattr(results[0], 'boxes') and results[0].boxes is not None:
@@ -256,17 +256,46 @@ VIOLATION_LEVEL = {
     '未戴安全帽': 2,
 }
 
-# 防抖：同一违规类型 30 秒内不重复入库
-ALARM_DEBOUNCE = 30
+# ==================== 系统配置（R9） ====================
+# 默认值仅作兜底，实际以 config 表为准；键名与 init_db.py 的 DEFAULT_CONFIG 保持一致
+CONFIG_DEFAULTS = {
+    'yolo_enabled': '1',            # YOLO 目标检测总开关
+    'qwen_enabled': '1',            # 千问大模型分析总开关
+    'violation_抽烟': '1',
+    'violation_未戴安全帽': '1',
+    'violation_打架斗殴': '1',
+    'violation_火灾': '1',
+    'violation_攀爬围墙': '1',
+    'yolo_conf': '0.5',             # YOLO 置信度阈值 0.3~0.9
+    'alarm_debounce': '30',         # 同类型告警防抖秒数
+}
+# 违规类型 → 识别开关的配置键
+VIOLATION_SWITCH_KEY = {v: f'violation_{v}' for v in VIOLATION_LEVEL}
+
+# 防抖时间戳：同一违规类型在该时长内不重复入库
 _last_alarm_ts = {}
 
 
-def save_alarm(violations, summary, pure_b64):
-    """把违规结果写入 alarms 表并抓拍存证，同一类型 30 秒内防抖；返回本轮新建的告警列表"""
+def get_config():
+    """每次调用都重新读 config 表，页面改完配置后检测链路即时生效，无需重启"""
+    cfg = dict(CONFIG_DEFAULTS)
+    for row in db.query('SELECT cfg_key, cfg_value FROM config'):
+        if row['cfg_key'] in CONFIG_DEFAULTS:
+            cfg[row['cfg_key']] = row['cfg_value']
+    return cfg
+
+
+def enabled_violations(cfg):
+    """当前开启识别的违规类型集合"""
+    return {v for v in VIOLATION_LEVEL if cfg.get(VIOLATION_SWITCH_KEY[v], '1') == '1'}
+
+
+def save_alarm(violations, summary, pure_b64, debounce_seconds):
+    """把违规结果写入 alarms 表并抓拍存证，同一类型 debounce_seconds 秒内防抖；返回本轮新建的告警列表"""
     now = time.time()
     created = []
     for v in violations:
-        if now - _last_alarm_ts.get(v, 0) < ALARM_DEBOUNCE:
+        if now - _last_alarm_ts.get(v, 0) < debounce_seconds:
             continue
         _last_alarm_ts[v] = now
         level = VIOLATION_LEVEL.get(v, 2)
@@ -343,13 +372,24 @@ async def websocket_detect(websocket: WebSocket):
                 )
                 continue
 
-            # 丢到线程池跑 YOLO
+            # 实时读配置：YOLO 总开关关闭时直接返回空结果，不再推理
+            cfg = get_config()
+            if cfg['yolo_enabled'] != '1':
+                await manager.send_personal_message(
+                    {'status': 'ok', 'detections': [], 'yolo_enabled': False,
+                     'message': 'YOLO 检测已在系统配置中关闭'}, websocket
+                )
+                continue
+
+            # 丢到线程池跑 YOLO（阈值取当前配置）
             loop = asyncio.get_running_loop()
-            detections = await loop.run_in_executor(executor, run_yolo, frame)
+            detections = await loop.run_in_executor(
+                executor, run_yolo, frame, float(cfg['yolo_conf'])
+            )
 
             # 回推检测结果（前端拿这个画框 + 更新计数）
             await manager.send_personal_message(
-                {'status': 'ok', 'detections': detections}, websocket
+                {'status': 'ok', 'detections': detections, 'yolo_enabled': True}, websocket
             )
 
     except WebSocketDisconnect:
@@ -377,6 +417,22 @@ async def websocket_qwen(websocket: WebSocket):
             pure_b64 = extract_pure_base64(base64_image)
             if not pure_b64:
                 await websocket.send_json({'status': 'error', 'message': '图片数据解析失败'})
+                continue
+
+            # 实时读配置：千问总开关关闭时不调用大模型，也不产生告警
+            cfg = get_config()
+            if cfg['qwen_enabled'] != '1':
+                await websocket.send_json({
+                    'status': 'ok',
+                    'model': QWEN_MODEL,
+                    'timestamp': time.strftime('%H:%M:%S'),
+                    'summary': '千问分析已在系统配置中关闭',
+                    'violations_cn': [],
+                    'risk_level': '低',
+                    'suggestions': [],
+                    'detections': detections,
+                    'qwen_enabled': False,
+                })
                 continue
 
             # 调用千问大模型做安全分析
@@ -407,9 +463,15 @@ async def websocket_qwen(websocket: WebSocket):
             if '爬墙' in result_text or '攀爬' in result_text:
                 violations.append('攀爬围墙')
 
-            # 检出违规时写入告警表并抓拍存证（带防抖），随后广播给所有在线前端
+            # 按系统配置剔除已关闭的违规类型：关掉后既不告警也不前端提示
+            enabled = enabled_violations(cfg)
+            violations = [v for v in violations if v in enabled]
+
+            # 检出违规时写入告警表并抓拍存证（防抖秒数取当前配置），随后广播给所有在线前端
             if violations:
-                new_alarms = save_alarm(violations, result_text, pure_b64)
+                new_alarms = save_alarm(
+                    violations, result_text, pure_b64, int(cfg['alarm_debounce'])
+                )
                 if new_alarms:
                     await notify_manager.broadcast({
                         'status': 'ok',
@@ -426,7 +488,8 @@ async def websocket_qwen(websocket: WebSocket):
                 'violations_cn': violations,        # 中文违规项列表
                 'risk_level': risk_level,           # 风险等级 高/中/低
                 'suggestions': [],                  # 可扩展：让千问返回建议
-                'detections': detections            # 顺便回传 YOLO 上下文
+                'detections': detections,           # 顺便回传 YOLO 上下文
+                'qwen_enabled': True
             })
 
     except WebSocketDisconnect:
@@ -459,10 +522,17 @@ async def detect_object(request: DetectRequest):
     if err:
         raise HTTPException(status_code=400, detail=err)
 
-    loop = asyncio.get_running_loop()
-    detections = await loop.run_in_executor(executor, run_yolo, frame)
+    cfg = get_config()
+    if cfg['yolo_enabled'] != '1':
+        return {'status': 'ok', 'detections': [], 'yolo_enabled': False,
+                'message': 'YOLO 检测已在系统配置中关闭'}
 
-    return {'status': 'ok', 'detections': detections}
+    loop = asyncio.get_running_loop()
+    detections = await loop.run_in_executor(
+        executor, run_yolo, frame, float(cfg['yolo_conf'])
+    )
+
+    return {'status': 'ok', 'detections': detections, 'yolo_enabled': True}
 
 
 # ==================== HTTP：告警查询 /api/alarms ====================
@@ -782,6 +852,8 @@ def allowed_roles(method: str, path: str):
     """接口允许的角色；返回 None 表示所有已登录角色可用"""
     if path in ('/api/logout', '/api/me'):
         return None
+    if path.startswith('/api/config'):
+        return [ROLE_ADMIN]                        # 系统配置仅超级管理员可见可改
     if method == 'GET':
         if path.startswith('/api/devices'):
             return [ROLE_ADMIN]                    # 设备台账仅超管可见
@@ -887,6 +959,71 @@ def get_me(request: Request):
     if not sess:
         raise HTTPException(status_code=401, detail='未登录或登录已过期')
     return {'status': 'ok', 'username': sess['username'], 'role': sess['role']}
+
+
+# ==================== R9 系统配置：读取 / 修改 ====================
+class ConfigUpdateRequest(BaseModel):
+    items: dict[str, str] = Field(..., description='待更新的配置键值对')
+
+
+def normalize_config_item(key: str, value: str) -> str:
+    """校验并归一化单个配置项；非法值直接拒绝，避免脏配置影响检测链路"""
+    if key not in CONFIG_DEFAULTS:
+        raise HTTPException(status_code=400, detail=f'不支持的配置项：{key}')
+    value = (value or '').strip()
+    if key == 'yolo_conf':
+        try:
+            num = float(value)
+        except ValueError:
+            raise HTTPException(status_code=400, detail='置信度阈值必须是数字')
+        if not 0.3 <= num <= 0.9:
+            raise HTTPException(status_code=400, detail='置信度阈值需在 0.3~0.9 之间')
+        return f'{num:.2f}'
+    if key == 'alarm_debounce':
+        try:
+            num = int(value)
+        except ValueError:
+            raise HTTPException(status_code=400, detail='防抖时长必须是整数秒')
+        if not 1 <= num <= 3600:
+            raise HTTPException(status_code=400, detail='防抖时长需在 1~3600 秒之间')
+        return str(num)
+    # 其余均为开关项，只接受 0 / 1
+    if value not in ('0', '1'):
+        raise HTTPException(status_code=400, detail=f'{key} 只接受 0 或 1')
+    return value
+
+
+@app.get('/api/config')
+def get_system_config():
+    return {'status': 'ok', 'config': get_config()}
+
+
+@app.put('/api/config')
+def update_system_config(req: ConfigUpdateRequest, request: Request):
+    if not req.items:
+        raise HTTPException(status_code=400, detail='没有需要更新的配置项')
+
+    old = get_config()
+    changes = []
+    for key, value in req.items.items():
+        new_value = normalize_config_item(key, value)
+        if old.get(key) == new_value:
+            continue
+        db.execute(
+            'INSERT INTO config (cfg_key, cfg_value) VALUES (%s, %s) '
+            'ON DUPLICATE KEY UPDATE cfg_value = VALUES(cfg_value)',
+            (key, new_value)
+        )
+        changes.append(f'{key}: {old.get(key, "—")} → {new_value}')
+
+    # 配置变更留痕（R10 操作日志页会展示这些记录）
+    if changes:
+        db.execute(
+            'INSERT INTO op_logs (op_time, username, op_type, detail) VALUES (%s, %s, %s, %s)',
+            (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+             request.state.user.get('username', ''), '配置修改', '；'.join(changes))
+        )
+    return {'status': 'ok', 'changed': len(changes), 'config': get_config()}
 
 
 # ==================== 静态资源（必须放最后） ====================

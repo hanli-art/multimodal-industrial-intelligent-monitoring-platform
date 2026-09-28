@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-perm="settings">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>系统配置 - 多模态工业智能监控平台</title>
+  <link rel="stylesheet" href="./css/admin.css">
+  <script src="./js/auth.js"></script>
+</head>
+<body>
+
+<div class="admin-layout">
+
+  <!-- 左侧导航 -->
+  <aside class="admin-sidebar">
+    <div class="admin-logo">工业智能监控平台</div>
+    <nav class="admin-menu">
+      <div class="menu-group">监控</div>
+      <a href="./index.html">实时监控</a>
+      <div class="menu-group">安全</div>
+      <a href="./alarms.html">告警管理</a>
+      <div class="menu-group">设备</div>
+      <a href="./devices.html" data-perm="device">设备管理</a>
+      <div class="menu-group">系统</div>
+      <a href="./settings.html" class="active" data-perm="settings">系统配置</a>
+    </nav>
+    <div class="admin-user">
+      <span class="admin-user-name" data-user-name>—</span>
+      <span data-user-role></span>
+      <a href="javascript:void(0)" data-logout>退出登录</a>
+    </div>
+  </aside>
+
+  <!-- 右侧内容 -->
+  <main class="admin-main">
+    <h1 class="admin-page-title">系统配置</h1>
+    <p class="admin-page-sub">识别与告警规则配置 · 修改后立即对检测链路生效，无需重启服务</p>
+
+    <div class="settings-stack">
+
+      <!-- 算法总开关 -->
+      <div class="admin-card">
+        <div class="settings-card-head">算法总开关<span>关闭后对应的识别能力整体停用</span></div>
+        <div class="setting-item">
+          <div class="setting-text">
+            <div class="setting-name">YOLO 目标检测</div>
+            <div class="setting-desc">关闭后实时监控页不再返回目标框与目标计数</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" data-key="yolo_enabled">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <div class="setting-text">
+            <div class="setting-name">千问大模型分析</div>
+            <div class="setting-desc">关闭后不再调用大模型做场景分析，也不再产生任何违规告警</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" data-key="qwen_enabled">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 违规类型识别 -->
+      <div class="admin-card">
+        <div class="settings-card-head">违规类型识别<span>逐类启停，关闭的类型不再上报与告警</span></div>
+        <div class="setting-item">
+          <div class="setting-text">
+            <div class="setting-name">抽烟识别</div>
+            <div class="setting-desc">识别有人手持香烟 / 吸烟行为</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" data-key="violation_抽烟">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <div class="setting-text">
+            <div class="setting-name">未戴安全帽识别</div>
+            <div class="setting-desc">识别工地场景中人员未佩戴安全帽</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" data-key="violation_未戴安全帽">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <div class="setting-text">
+            <div class="setting-name">打架斗殴识别</div>
+            <div class="setting-desc">识别聚众闹事、打架行为</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" data-key="violation_打架斗殴">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <div class="setting-text">
+            <div class="setting-name">火灾识别</div>
+            <div class="setting-desc">识别生产车间 / 工地出现的火苗</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" data-key="violation_火灾">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <div class="setting-text">
+            <div class="setting-name">攀爬围墙识别</div>
+            <div class="setting-desc">识别有人翻越围墙等安全隐患</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" data-key="violation_攀爬围墙">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 检测与告警参数 -->
+      <div class="admin-card">
+        <div class="settings-card-head">检测与告警参数<span>阈值越高越严格，低置信度目标不再报出</span></div>
+        <div class="setting-item">
+          <div class="setting-text">
+            <div class="setting-name">YOLO 置信度阈值</div>
+            <div class="setting-desc">可调范围 0.30 ~ 0.90，建议 0.50</div>
+          </div>
+          <div class="conf-range-row">
+            <input type="range" data-key="yolo_conf" id="cfgYoloConf" min="0.3" max="0.9" step="0.05">
+            <span class="conf-range-val" id="cfgYoloConfVal">0.50</span>
+          </div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-text">
+            <div class="setting-name">告警防抖时长</div>
+            <div class="setting-desc">同一违规类型在该时长内只产生一条告警，单位：秒</div>
+          </div>
+          <input type="number" data-key="alarm_debounce" id="cfgDebounce" min="1" max="3600" step="1">
+        </div>
+      </div>
+
+      <!-- 保存栏 -->
+      <div class="settings-foot">
+        <button class="btn btn-primary" id="btnSave">保存配置</button>
+        <button class="btn" id="btnReload">重新载入</button>
+        <span class="settings-msg" id="settingsMsg"></span>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script src="./js/settings.js"></script>
+</body>
+</html>

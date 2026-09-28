@@ -667,6 +667,135 @@ a { text-decoration: none; color: inherit; }
 
 .admin-user a:hover { text-decoration: underline; }
 
+/* ===== 系统配置页（R9） ===== */
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 780px;
+}
+
+.settings-card-head {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settings-card-head span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--admin-text-dim);
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.setting-item:last-of-type { border-bottom: none; }
+
+.setting-text { min-width: 0; }
+
+.setting-name { font-size: 13px; color: var(--admin-text); }
+
+.setting-desc {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--admin-text-dim);
+}
+
+/* 开关：原生 checkbox 隐藏，用 .slider 绘制 */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.switch .slider {
+  position: absolute;
+  inset: 0;
+  background: #d1d5db;
+  border-radius: 12px;
+  transition: background 0.15s;
+  cursor: pointer;
+}
+
+.switch .slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.15s;
+}
+
+.switch input:checked + .slider { background: var(--admin-primary); }
+.switch input:checked + .slider::before { transform: translateX(20px); }
+.switch input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
+
+/* 置信度滑块 */
+.conf-range-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 300px;
+}
+
+.conf-range-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--admin-primary);
+}
+
+.conf-range-val {
+  width: 40px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--admin-primary);
+}
+
+.setting-item input[type="number"] {
+  height: 34px;
+  width: 96px;
+  padding: 0 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--admin-text);
+  outline: none;
+}
+
+.setting-item input[type="number"]:focus { border-color: var(--admin-primary); }
+
+/* 保存栏 */
+.settings-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.settings-tip { font-size: 12px; color: var(--admin-text-dim); }
+
+.settings-msg { font-size: 13px; color: var(--status-done); }
+
+.settings-msg.err { color: var(--level-1); }
+
 /* ===== 响应式 ===== */
 @media (max-width: 860px) {
   .admin-layout { flex-direction: column; }
@@ -691,4 +820,6 @@ a { text-decoration: none; color: inherit; }
   .device-tree-card { width: 100%; }
   .form-grid { grid-template-columns: 1fr; }
   .admin-user { border-top: none; padding: 10px 14px; }
+  .setting-item { flex-direction: column; align-items: flex-start; }
+  .conf-range-row { flex: 1; width: 100%; }
 }
