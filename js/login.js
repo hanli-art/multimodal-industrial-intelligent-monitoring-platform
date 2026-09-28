@@ -5,7 +5,7 @@ function $(id) { return document.getElementById(id); }
 let captchaId = '';
 
 /* 已登录直接进首页，避免重复登录 */
-if (Auth.getToken()) location.replace('./index.html');
+if (Auth.getToken()) location.replace('./dashboard.html');
 
 function showError(msg) {
   $('loginErr').textContent = msg || '';
@@ -45,7 +45,7 @@ async function doLogin(e) {
     const data = await res.json();
     if (data.status === 'ok') {
       Auth.setSession(data.token, { username: data.username, role: data.role });
-      location.href = './index.html';
+      location.href = './dashboard.html';
       return;
     }
     showError(data.detail || data.message || '登录失败');

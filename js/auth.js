@@ -43,6 +43,7 @@
     var role = (getUser() || {}).role || '';
     if (!role) return false;
     if (perm === 'device' || perm === 'settings') return role === ROLE_ADMIN;
+    if (perm === 'report') return role === ROLE_ADMIN || role === ROLE_SAFETY;
     if (perm === 'alarm_handle' || perm === 'evidence') {
       return role === ROLE_ADMIN || role === ROLE_SAFETY;
     }
@@ -102,7 +103,7 @@
       toLogin();
     } else {
       var pagePerm = document.documentElement.getAttribute('data-page-perm');
-      if (pagePerm && !can(pagePerm)) location.replace('./alarms.html');
+      if (pagePerm && !can(pagePerm)) location.replace('./dashboard.html');
     }
   }
 

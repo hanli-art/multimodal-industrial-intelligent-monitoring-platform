@@ -1,14 +1,15 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Request
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 import base64
+import csv
 import hashlib
 import hmac
 import random
 import secrets
-from io import BytesIO
+from io import BytesIO, StringIO
 from PIL import Image
 import numpy as np
 import cv2
@@ -22,7 +23,7 @@ import asyncio
 import time
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import db  # import 时加载 .env，供下方 os.getenv 读取
 
@@ -611,6 +612,126 @@ def get_recent_alarms(limit: int = Query(10, ge=1, le=50)):
     return {'status': 'ok', 'total': len(items), 'items': items}
 
 
+# ==================== R7 数据总览：/api/stats ====================
+@app.get('/api/stats')
+def get_stats(days: int = Query(7, ge=1, le=30, description='统计天数，默认近 7 日')):
+    """数据总览所需的全部统计：卡片数据 + 违规类型占比 + 近 N 日趋势 + 车间违规排名 + 最新告警"""
+    now = datetime.now()
+    today = now.strftime('%Y-%m-%d')
+    since = (now - timedelta(days=days - 1)).strftime('%Y-%m-%d 00:00:00')
+
+    cards = {
+        'today_count': db.query(
+            'SELECT COUNT(*) AS c FROM alarms WHERE alarm_time >= %s', (today + ' 00:00:00',)
+        )[0]['c'],
+        'today_level1': db.query(
+            'SELECT COUNT(*) AS c FROM alarms WHERE level = 1 AND alarm_time >= %s',
+            (today + ' 00:00:00',)
+        )[0]['c'],
+        'pending_count': db.query(
+            "SELECT COUNT(*) AS c FROM alarms WHERE status = '待处理'"
+        )[0]['c'],
+    }
+    dev = db.query(f'SELECT COUNT(*) AS total, SUM({_ONLINE_CASE}) AS online FROM devices d')[0]
+    cards['device_total'] = int(dev['total'])
+    cards['device_online'] = int(dev['online'] or 0)
+
+    # 违规类型占比（近 N 日）
+    type_ratio = [
+        {'name': r['violation_type'], 'value': int(r['c'])}
+        for r in db.query(
+            'SELECT violation_type, COUNT(*) AS c FROM alarms WHERE alarm_time >= %s '
+            'GROUP BY violation_type ORDER BY c DESC', (since,)
+        )
+    ]
+
+    # 近 N 日趋势，缺失的日期补 0，保证折线 X 轴连续
+    daily = {r['d']: int(r['c']) for r in db.query(
+        "SELECT DATE_FORMAT(alarm_time, '%%Y-%%m-%%d') AS d, COUNT(*) AS c "
+        'FROM alarms WHERE alarm_time >= %s GROUP BY d', (since,)
+    )}
+    trend = []
+    for i in range(days - 1, -1, -1):
+        d = (now - timedelta(days=i)).strftime('%Y-%m-%d')
+        trend.append({'date': d[5:], 'count': daily.get(d, 0)})
+
+    # 车间违规排名：告警点位与设备安装位置一致才算归属车间，其余归入“未分配点位”
+    matched = db.query(
+        "SELECT COALESCE(NULLIF(d.workshop, ''), '未分组设备') AS ws_name, COUNT(*) AS c "
+        'FROM alarms a JOIN devices d ON d.location = a.location '
+        "WHERE a.alarm_time >= %s AND a.location <> '' "
+        "GROUP BY COALESCE(NULLIF(d.workshop, ''), '未分组设备') ORDER BY c DESC", (since,)
+    )
+    workshop_rank = [{'name': r['ws_name'], 'value': int(r['c'])} for r in matched]
+    rest = sum(t['value'] for t in type_ratio) - sum(w['value'] for w in workshop_rank)
+    if rest > 0:
+        workshop_rank.append({'name': '未分配点位', 'value': rest})
+
+    recent = db.query(
+        'SELECT id, alarm_time, location, violation_type, level, status FROM alarms '
+        'ORDER BY alarm_time DESC, id DESC LIMIT 10'
+    )
+    return {
+        'status': 'ok',
+        'days': days,
+        'cards': cards,
+        'type_ratio': type_ratio,
+        'trend': trend,
+        'workshop_rank': workshop_rank,
+        'recent': recent,
+    }
+
+
+# ==================== R7 台账报表：/api/alarms/export（CSV 下载） ====================
+@app.get('/api/alarms/export')
+def export_alarms_csv(
+    start_time: str = '',
+    end_time: str = '',
+    violation_type: str = '',
+    status: str = '',
+):
+    """按筛选条件导出全部告警台账为 CSV；加 UTF-8 BOM，Excel 双击打开不乱码"""
+    where = []
+    params = []
+    if start_time:
+        where.append('alarm_time >= %s')
+        params.append(start_time)
+    if end_time:
+        where.append('alarm_time <= %s')
+        params.append(end_time)
+    if violation_type:
+        where.append('violation_type = %s')
+        params.append(violation_type)
+    if status:
+        where.append('status = %s')
+        params.append(status)
+
+    where_sql = (' WHERE ' + ' AND '.join(where)) if where else ''
+    rows = db.query(
+        f'SELECT id, alarm_time, location, violation_type, status FROM alarms{where_sql} '
+        'ORDER BY alarm_time DESC, id DESC', params
+    )
+
+    buf = StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(['隐患编号', '时间', '地点', '违规行为', '状态'])
+    for r in rows:
+        writer.writerow([
+            f"HZ{r['id']:05d}",
+            r['alarm_time'].strftime('%Y-%m-%d %H:%M:%S'),
+            r['location'] or '未分配点位',
+            r['violation_type'],
+            r['status'],
+        ])
+
+    filename = f"alarm_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=('\ufeff' + buf.getvalue()).encode('utf-8'),
+        media_type='text/csv; charset=utf-8',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
 # ==================== HTTP：告警处理 /api/alarms/{id} ====================
 class AlarmUpdateRequest(BaseModel):
     status: str = Field(..., description='处理状态：已处理 / 已驳回')
@@ -854,6 +975,8 @@ def allowed_roles(method: str, path: str):
         return None
     if path.startswith('/api/config'):
         return [ROLE_ADMIN]                        # 系统配置仅超级管理员可见可改
+    if path.startswith('/api/alarms/export'):
+        return [ROLE_ADMIN, ROLE_SAFETY]           # 台账导出属于报表能力，查看员不可用
     if method == 'GET':
         if path.startswith('/api/devices'):
             return [ROLE_ADMIN]                    # 设备台账仅超管可见

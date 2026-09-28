@@ -801,6 +801,98 @@ a { text-decoration: none; color: inherit; }
 
 .settings-msg.err { color: var(--level-1); }
 
+/* ===== 数据总览页（R7） ===== */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.stat-card {
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-border);
+  border-radius: 4px;
+  padding: 15px 18px;
+}
+
+.stat-label { font-size: 12px; color: var(--admin-text-dim); }
+
+.stat-value {
+  margin-top: 8px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.stat-value .unit {
+  margin-left: 3px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--admin-text-dim);
+}
+
+.stat-value.danger { color: var(--level-1); }
+
+.stat-sub { margin-top: 6px; font-size: 12px; color: var(--admin-text-dim); }
+
+/* 图表区：饼图/折线/柱状 */
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.chart-card {
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-border);
+  border-radius: 4px;
+}
+
+.chart-card.full { grid-column: 1 / -1; }
+
+.chart-head {
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.chart-head span {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--admin-text-dim);
+}
+
+.chart-box { height: 300px; padding: 6px; }
+
+/* ===== 台账报表页（R7） ===== */
+.tabs { display: flex; gap: 8px; }
+
+.tab {
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid var(--admin-border);
+  border-radius: 4px;
+  background: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--admin-text);
+  cursor: pointer;
+}
+
+.tab:hover { border-color: var(--admin-primary); color: var(--admin-primary); }
+
+.tab.active {
+  background: var(--admin-primary);
+  border-color: var(--admin-primary);
+  color: #fff;
+}
+
+.range-tip { font-size: 12px; color: var(--admin-text-dim); }
+
 /* ===== 响应式 ===== */
 @media (max-width: 860px) {
   .admin-layout { flex-direction: column; }
@@ -827,4 +919,6 @@ a { text-decoration: none; color: inherit; }
   .admin-user { border-top: none; padding: 10px 14px; }
   .setting-item { flex-direction: column; align-items: flex-start; }
   .conf-range-row { flex: 1; width: 100%; }
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+  .chart-grid { grid-template-columns: 1fr; }
 }

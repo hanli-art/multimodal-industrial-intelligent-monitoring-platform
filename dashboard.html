@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据总览 - 多模态工业智能监控平台</title>
+  <link rel="stylesheet" href="./css/admin.css">
+  <script src="./js/auth.js"></script>
+  <script src="https://cdn.staticfile.org/echarts/5.4.3/echarts.min.js"></script>
+</head>
+<body>
+
+<div class="admin-layout">
+
+  <!-- 左侧导航 -->
+  <aside class="admin-sidebar">
+    <div class="admin-logo">工业智能监控平台</div>
+    <nav class="admin-menu">
+      <div class="menu-group">监控</div>
+      <a href="./index.html">实时监控</a>
+      <div class="menu-group">安全</div>
+      <a href="./alarms.html">告警管理</a>
+      <div class="menu-group">报表</div>
+      <a href="./dashboard.html" class="active">数据总览</a>
+      <a href="./reports.html" data-perm="report">统计报表</a>
+      <div class="menu-group">设备</div>
+      <a href="./devices.html" data-perm="device">设备管理</a>
+      <div class="menu-group">系统</div>
+      <a href="./settings.html" data-perm="settings">系统配置</a>
+    </nav>
+    <div class="admin-user">
+      <span class="admin-user-name" data-user-name>—</span>
+      <span data-user-role></span>
+      <a href="javascript:void(0)" data-logout>退出登录</a>
+    </div>
+  </aside>
+
+  <!-- 右侧内容 -->
+  <main class="admin-main">
+    <h1 class="admin-page-title">数据总览</h1>
+    <p class="admin-page-sub">安全数据一屏总览 · 图表统计口径为近 7 日</p>
+
+    <!-- 顶部数据卡片 -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">今日告警</div>
+        <div class="stat-value"><span id="cardToday">—</span><span class="unit">条</span></div>
+        <div class="stat-sub">今日 00:00 起</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">待处理隐患</div>
+        <div class="stat-value"><span id="cardPending">—</span><span class="unit">条</span></div>
+        <div class="stat-sub">全部未处理告警</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">在线设备</div>
+        <div class="stat-value"><span id="cardDevices">—</span><span class="unit">台</span></div>
+        <div class="stat-sub" id="cardDeviceSub">在线率 —</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">今日一级告警</div>
+        <div class="stat-value danger"><span id="cardLevel1">—</span><span class="unit">条</span></div>
+        <div class="stat-sub">火灾 / 打架 / 攀爬 / 抽烟</div>
+      </div>
+    </div>
+
+    <!-- 图表区 -->
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-head">违规类型占比<span>近 7 日</span></div>
+        <div class="chart-box" id="pieChart"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-head">告警趋势<span>近 7 日 / 条</span></div>
+        <div class="chart-box" id="lineChart"></div>
+      </div>
+      <div class="chart-card full">
+        <div class="chart-head">车间违规排名<span>近 7 日</span></div>
+        <div class="chart-box" id="barChart"></div>
+      </div>
+    </div>
+
+    <!-- 最新告警 -->
+    <div class="admin-card">
+      <div class="chart-head">最新告警<span>最近 10 条</span></div>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>点位</th>
+              <th>违规行为</th>
+              <th>等级</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody id="recentBody">
+            <tr><td colspan="5" class="empty-state">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="./js/dashboard.js"></script>
+</body>
+</html>
