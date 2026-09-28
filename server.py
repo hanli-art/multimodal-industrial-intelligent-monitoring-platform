@@ -432,6 +432,25 @@ def get_alarm_summary():
     }
 
 
+# ==================== HTTP：告警处理 /api/alarms/{id} ====================
+class AlarmUpdateRequest(BaseModel):
+    status: str = Field(..., description='处理状态：已处理 / 已驳回')
+    remark: str = ''
+
+
+@app.patch('/api/alarms/{alarm_id}')
+def update_alarm(alarm_id: int, req: AlarmUpdateRequest):
+    if req.status not in ('已处理', '已驳回'):
+        raise HTTPException(status_code=400, detail='无效的处理状态')
+    if not db.query('SELECT id FROM alarms WHERE id = %s', (alarm_id,)):
+        raise HTTPException(status_code=404, detail='告警不存在')
+    db.execute(
+        'UPDATE alarms SET status = %s, remark = %s WHERE id = %s',
+        (req.status, req.remark, alarm_id)
+    )
+    return {'status': 'ok'}
+
+
 # ==================== 静态资源（必须放最后） ====================
 app.mount('/', StaticFiles(directory='.', html=True), name='static')
 

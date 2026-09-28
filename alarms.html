@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>告警管理 - 多模态工业智能监控平台</title>
+  <link rel="stylesheet" href="./css/admin.css">
+</head>
+<body>
+
+<div class="admin-layout">
+
+  <!-- 左侧导航 -->
+  <aside class="admin-sidebar">
+    <div class="admin-logo">工业智能监控平台</div>
+    <nav class="admin-menu">
+      <div class="menu-group">监控</div>
+      <a href="./index.html">实时监控</a>
+      <div class="menu-group">安全</div>
+      <a href="./alarms.html" class="active">告警管理</a>
+    </nav>
+  </aside>
+
+  <!-- 右侧内容 -->
+  <main class="admin-main">
+    <h1 class="admin-page-title">告警管理</h1>
+    <p class="admin-page-sub">查询与处理 AI 告警记录</p>
+
+    <div class="admin-card">
+      <!-- 筛选栏 -->
+      <div class="filter-bar">
+        <div class="filter-item">
+          <label>开始时间</label>
+          <input type="datetime-local" id="startTime">
+        </div>
+        <div class="filter-item">
+          <label>结束时间</label>
+          <input type="datetime-local" id="endTime">
+        </div>
+        <div class="filter-item">
+          <label>违规类型</label>
+          <select id="violationType">
+            <option value="">全部</option>
+            <option>抽烟</option>
+            <option>未戴安全帽</option>
+            <option>打架斗殴</option>
+            <option>火灾</option>
+            <option>攀爬围墙</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <label>告警等级</label>
+          <select id="level">
+            <option value="">全部</option>
+            <option value="1">一级</option>
+            <option value="2">二级</option>
+            <option value="3">三级</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <label>处理状态</label>
+          <select id="status">
+            <option value="">全部</option>
+            <option>待处理</option>
+            <option>已处理</option>
+            <option>已驳回</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="btnSearch">查询</button>
+        <button class="btn" id="btnReset">重置</button>
+      </div>
+
+      <!-- 列表 -->
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>点位</th>
+              <th>违规类型</th>
+              <th>等级</th>
+              <th>置信度</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="7" class="empty-state">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 分页 -->
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </main>
+</div>
+
+<!-- 处理弹窗 -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <div class="modal-header" id="modalTitle">标记已处理</div>
+    <div class="modal-body">
+      <div class="modal-tip" id="modalTip">请填写整改备注</div>
+      <textarea id="modalRemark" placeholder="请填写备注..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="btnCancel">取消</button>
+      <button class="btn btn-primary" id="btnConfirm">确认</button>
+    </div>
+  </div>
+</div>
+
+<script src="./js/alarms.js"></script>
+</body>
+</html>
