@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>多模态工业安全智能监控平台</title>
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+
+<!-- 背景层 -->
+<div class="starfield" id="starfield"></div>
+<div class="grid-overlay"></div>
+<div class="scanlines"></div>
+
+<!-- 顶部导航 -->
+<header>
+  <div class="header-left">
+    <span class="logo-hex">⬢</span>
+    <h1>多模态工业安全智能监控平台</h1>
+    <span class="badge" id="wsBadge">ONLINE</span>
+  </div>
+  <div class="header-right">
+    <span class="sys-node">NODE-01</span>
+    <span class="header-sep">|</span>
+    <span class="sys-fps" id="sysFps">-- FPS</span>
+    <span class="header-sep">|</span>
+    <span id="clock">--:--:--</span>
+  </div>
+</header>
+
+<!-- 主体 -->
+<div class="container">
+
+  <!-- 左：视频监控 -->
+  <div class="card video-card">
+    <div class="card-hud-top">
+      <span class="hud-label">VIDEO MONITORING</span>
+      <span class="hud-status" id="detectStatus">STANDBY</span>
+    </div>
+
+    <!-- 数据源 -->
+    <div class="source-row">
+      <label>SOURCE</label>
+      <select id="sourceType">
+        <option value="file" selected>本地视频</option>
+        <option value="camera">摄像头实时流</option>
+      </select>
+      <span class="hint" id="sourceHint">当前：本地视频</span>
+    </div>
+
+    <!-- 文件选择 -->
+    <div class="file-select">
+      <label for="videoFile">选择视频文件</label>
+      <input type="file" id="videoFile" accept="video/*">
+      <span id="fileName">未选择文件</span>
+    </div>
+
+    <!-- 视频区 -->
+    <div class="video-wrapper">
+      <div class="video-wrap">
+        <canvas id="videoCanvas"></canvas>
+        <div class="video-frame-corners">
+          <span class="vfc tl"></span>
+          <span class="vfc tr"></span>
+          <span class="vfc bl"></span>
+          <span class="vfc br"></span>
+        </div>
+      </div>
+
+      <!-- 控件 -->
+      <div class="controls">
+        <button id="playPauseBtn" disabled>▶ 播放</button>
+        <button id="btnStartDetected" disabled>开始检测</button>
+        <input type="range" id="progressBar" min="0" max="1000" value="0">
+        <span class="time-label" id="timeLabel">00:00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右：状态 + 日志 -->
+  <div class="card">
+    <div class="card-hud-top">
+      <span class="hud-label">SYSTEM STATUS</span>
+      <span class="hud-status pulse" id="liveBadge">LIVE</span>
+    </div>
+
+    <!-- 状态统计 -->
+    <div class="status-grid">
+      <div class="status-item safe">
+        <div class="status-icon">🚗</div>
+        <div class="status-info">
+          <span class="label">车辆总数</span>
+          <span class="value" id="vehicleCount">0</span>
+          <span class="unit">VEHICLES</span>
+        </div>
+      </div>
+      <div class="status-item danger">
+        <div class="status-icon">🚶</div>
+        <div class="status-info">
+          <span class="label">行人数量</span>
+          <span class="value" id="personCount">0</span>
+          <span class="unit">PERSONS</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 日志 -->
+    <div class="log-module">
+      <div class="log-header">
+        <span class="log-title">告警日志 / EVENT LOG</span>
+        <span class="log-count" id="logCount">0</span>
+      </div>
+      <div class="log-container" id="logContainer">
+        <div class="log-placeholder" id="logPlaceholder">
+          <div class="log-empty-icon">⬢</div>
+          <div>暂无告警记录</div>
+          <div class="log-empty-sub">NO EVENTS</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="./js/app.js"></script>
+</body>
+</html>
