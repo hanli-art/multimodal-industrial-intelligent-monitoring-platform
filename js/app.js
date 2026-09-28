@@ -201,7 +201,7 @@ function renderQwenResult(data) {
     <div class="qwen-meta">
       <span class="qwen-risk ${riskClass}">风险等级：${escapeHtml(risk)}</span>
       <span class="qwen-time">${escapeHtml(data.timestamp || '')}</span>
-      <span class="qwen-model">${escapeHtml(data.model || 'qwen-vl-max')}</span>
+      <span class="qwen-model">${escapeHtml(data.model || '未知模型')}</span>
     </div>
     <div class="qwen-summary">${escapeHtml(data.summary || '（无结论）')}</div>
     <div class="qwen-sec-title">违规检测</div>

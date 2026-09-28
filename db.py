@@ -4,8 +4,9 @@ import pymysql
 from dotenv import load_dotenv
 from pymysql.cursors import DictCursor
 
-# 让 .env 里的配置注入环境变量（系统环境变量优先）
-load_dotenv()
+# 让 .env 里的配置注入环境变量；override=True 表示 .env 优先，
+# 避免机器上残留的旧同名环境变量（如过期的 DASHSCOPE_API_KEY）覆盖项目配置
+load_dotenv(override=True)
 
 DB_HOST = os.getenv('DB_HOST', '127.0.0.1')
 DB_PORT = int(os.getenv('DB_PORT', '3306'))

@@ -35,6 +35,9 @@ if not dashscope.api_key:
     logging.warning('未检测到环境变量 DASHSCOPE_API_KEY，/ws/qwen 大模型分析将不可用；'
                     '请在 .env 或系统环境变量中配置后重启。')
 
+# ========== 通义千问模型名（可在 .env 中通过 QWEN_MODEL 配置）==========
+QWEN_MODEL = os.getenv('QWEN_MODEL', 'qwen3.8-omni-flash')
+
 # ========== 加载 YOLO 模型 ==========
 print('[init] 正在加载 YOLO 模型...')
 model = YOLO('./yolov8m.pt')
@@ -197,7 +200,7 @@ def call_qianwen_model(base64_data: str) -> str:
         ]
 
         response = MultiModalConversation.call(
-            model='qwen3.7-plus',
+            model=QWEN_MODEL,
             messages=messages,
             result_format='messages',
             stream=False,
@@ -413,7 +416,7 @@ async def websocket_qwen(websocket: WebSocket):
             # 回推给前端
             await websocket.send_json({
                 'status': 'ok',
-                'model': 'qwen-vl-max',
+                'model': QWEN_MODEL,
                 'timestamp': time.strftime('%H:%M:%S'),
                 'summary': result_text,             # 千问原始文本
                 'violations_cn': violations,        # 中文违规项列表
