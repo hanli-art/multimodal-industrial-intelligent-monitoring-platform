@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -18,6 +18,9 @@ import asyncio
 import time
 import logging
 import os
+from datetime import datetime
+
+import db  # import 时加载 .env，供下方 os.getenv 读取
 
 # ========== 日志配置 ==========
 logging.basicConfig(
@@ -204,6 +207,36 @@ def extract_pure_base64(base64_image: str) -> str:
     return base64_image
 
 
+# ==================== 告警入库（R2） ====================
+# 违规类型 → 告警等级（1 一级 / 2 二级 / 3 三级）
+VIOLATION_LEVEL = {
+    '火灾': 1,
+    '打架斗殴': 1,
+    '攀爬围墙': 1,
+    '抽烟': 1,
+    '未戴安全帽': 2,
+}
+
+# 防抖：同一违规类型 30 秒内不重复入库
+ALARM_DEBOUNCE = 30
+_last_alarm_ts = {}
+
+
+def save_alarm(violations, summary):
+    """把违规结果写入 alarms 表，同一类型 30 秒内防抖"""
+    now = time.time()
+    for v in violations:
+        if now - _last_alarm_ts.get(v, 0) < ALARM_DEBOUNCE:
+            continue
+        _last_alarm_ts[v] = now
+        level = VIOLATION_LEVEL.get(v, 2)
+        db.execute(
+            'INSERT INTO alarms (alarm_time, location, violation_type, level, confidence, summary, status) '
+            'VALUES (%s, %s, %s, %s, %s, %s, %s)',
+            (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), '', v, level, 0, summary, '待处理')
+        )
+
+
 # ==================== FastAPI 实例 ====================
 app = FastAPI(title='智能工业监控平台')
 
@@ -301,6 +334,10 @@ async def websocket_qwen(websocket: WebSocket):
             if '爬墙' in result_text or '攀爬' in result_text:
                 violations.append('攀爬围墙')
 
+            # 检出违规时写入告警表（带防抖）
+            if violations:
+                save_alarm(violations, result_text)
+
             # 回推给前端
             await websocket.send_json({
                 'status': 'ok',
@@ -332,6 +369,67 @@ async def detect_object(request: DetectRequest):
     detections = await loop.run_in_executor(executor, run_yolo, frame)
 
     return {'status': 'ok', 'detections': detections}
+
+
+# ==================== HTTP：告警查询 /api/alarms ====================
+@app.get('/api/alarms')
+def get_alarms(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    start_time: str = '',
+    end_time: str = '',
+    violation_type: str = '',
+    level: int = Query(None),
+    status: str = '',
+):
+    where = []
+    params = []
+    if start_time:
+        where.append('alarm_time >= %s')
+        params.append(start_time)
+    if end_time:
+        where.append('alarm_time <= %s')
+        params.append(end_time)
+    if violation_type:
+        where.append('violation_type = %s')
+        params.append(violation_type)
+    if level:
+        where.append('level = %s')
+        params.append(level)
+    if status:
+        where.append('status = %s')
+        params.append(status)
+
+    where_sql = (' WHERE ' + ' AND '.join(where)) if where else ''
+    total = db.query(f'SELECT COUNT(*) AS c FROM alarms{where_sql}', params)[0]['c']
+    offset = (page - 1) * page_size
+    items = db.query(
+        f'SELECT * FROM alarms{where_sql} ORDER BY alarm_time DESC LIMIT %s OFFSET %s',
+        params + [page_size, offset]
+    )
+    return {'status': 'ok', 'total': total, 'page': page, 'page_size': page_size, 'items': items}
+
+
+# ==================== HTTP：告警统计 /api/alarms/summary ====================
+@app.get('/api/alarms/summary')
+def get_alarm_summary():
+    today = datetime.now().strftime('%Y-%m-%d')
+    today_count = db.query(
+        'SELECT COUNT(*) AS c FROM alarms WHERE alarm_time >= %s', (today + ' 00:00:00',)
+    )[0]['c']
+    pending_count = db.query(
+        "SELECT COUNT(*) AS c FROM alarms WHERE status = '待处理'"
+    )[0]['c']
+    level_rows = db.query('SELECT level, COUNT(*) AS c FROM alarms GROUP BY level')
+    level_counts = {1: 0, 2: 0, 3: 0}
+    for r in level_rows:
+        level_counts[r['level']] = r['c']
+    return {
+        'status': 'ok',
+        'today_count': today_count,
+        'pending_count': pending_count,
+        'level_counts': level_counts,
+    }
 
 
 # ==================== 静态资源（必须放最后） ====================
