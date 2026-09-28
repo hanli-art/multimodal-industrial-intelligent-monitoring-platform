@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-page-perm="report">
+<html lang="zh-CN" data-page-perm="logs">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>统计报表 - 多模态工业智能监控平台</title>
+  <title>操作日志 - 多模态工业智能监控平台</title>
   <link rel="stylesheet" href="./css/admin.css">
   <script src="./js/auth.js"></script>
 </head>
@@ -21,12 +21,12 @@
       <a href="./alarms.html">告警管理</a>
       <div class="menu-group">报表</div>
       <a href="./dashboard.html">数据总览</a>
-      <a href="./reports.html" class="active" data-perm="report">统计报表</a>
+      <a href="./reports.html" data-perm="report">统计报表</a>
       <div class="menu-group">设备</div>
       <a href="./devices.html" data-perm="device">设备管理</a>
       <div class="menu-group">系统</div>
       <a href="./settings.html" data-perm="settings">系统配置</a>
-      <a href="./logs.html" data-perm="logs">操作日志</a>
+      <a href="./logs.html" class="active" data-perm="logs">操作日志</a>
     </nav>
     <div class="admin-user">
       <span class="admin-user-name" data-user-name>—</span>
@@ -37,59 +37,51 @@
 
   <!-- 右侧内容 -->
   <main class="admin-main">
-    <h1 class="admin-page-title">统计报表</h1>
-    <p class="admin-page-sub">隐患台账 · 按日 / 周 / 月维度查询，支持导出 CSV</p>
+    <h1 class="admin-page-title">操作日志</h1>
+    <p class="admin-page-sub">关键操作全程留痕 · 登录、告警处理、设备变更、配置修改、证据下载</p>
 
     <div class="admin-card">
       <div class="filter-bar">
-        <div class="tabs">
-          <button class="tab active" data-period="day">日报表</button>
-          <button class="tab" data-period="week">周报表</button>
-          <button class="tab" data-period="month">月报表</button>
+        <div class="filter-item">
+          <label>开始时间</label>
+          <input type="datetime-local" id="startTime">
         </div>
         <div class="filter-item">
-          <label>违规行为</label>
-          <select id="typeFilter">
+          <label>结束时间</label>
+          <input type="datetime-local" id="endTime">
+        </div>
+        <div class="filter-item">
+          <label>操作用户</label>
+          <select id="userFilter">
             <option value="">全部</option>
-            <option value="抽烟">抽烟</option>
-            <option value="未戴安全帽">未戴安全帽</option>
-            <option value="打架斗殴">打架斗殴</option>
-            <option value="火灾">火灾</option>
-            <option value="攀爬围墙">攀爬围墙</option>
           </select>
         </div>
         <div class="filter-item">
-          <label>处理状态</label>
-          <select id="statusFilter">
+          <label>操作类型</label>
+          <select id="typeFilter">
             <option value="">全部</option>
-            <option value="待处理">待处理</option>
-            <option value="已处理">已处理</option>
-            <option value="已驳回">已驳回</option>
           </select>
         </div>
         <button class="btn btn-primary" id="btnSearch">查询</button>
         <button class="btn" id="btnReset">重置</button>
-        <button class="btn" id="btnExport" style="margin-left:auto;">导出 CSV</button>
       </div>
 
       <div class="filter-bar" style="padding-top:0;border-bottom:none;">
-        <span class="range-tip" id="rangeTip">统计范围：—</span>
-        <span class="range-tip" id="totalTip" style="margin-left:auto;"></span>
+        <span class="range-tip" id="totalTip">共 0 条日志</span>
       </div>
 
       <div class="admin-table-wrap">
         <table class="admin-table">
           <thead>
             <tr>
-              <th>隐患编号</th>
-              <th>时间</th>
-              <th>地点</th>
-              <th>违规行为</th>
-              <th>状态</th>
+              <th style="width:170px;">时间</th>
+              <th style="width:120px;">操作用户</th>
+              <th style="width:120px;">操作类型</th>
+              <th>详情</th>
             </tr>
           </thead>
           <tbody id="tbody">
-            <tr><td colspan="5" class="empty-state">加载中...</td></tr>
+            <tr><td colspan="4" class="empty-state">加载中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -99,6 +91,6 @@
   </main>
 </div>
 
-<script src="./js/reports.js"></script>
+<script src="./js/logs.js"></script>
 </body>
 </html>

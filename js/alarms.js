@@ -76,7 +76,7 @@ function renderTable(items) {
         '</div>'
       : '<span style="font-size:12px;color:#9ca3af;">—</span>';
     return '<tr>' +
-      `<td>${escapeHtml(a.alarm_time || '')}</td>` +
+      `<td>${escapeHtml(String(a.alarm_time || '').replace('T', ' '))}</td>` +
       `<td>${escapeHtml(a.location || '—')}</td>` +
       `<td>${escapeHtml(a.violation_type || '')}</td>` +
       `<td><span class="tag ${levelTag}">${levelText}</span></td>` +

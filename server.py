@@ -739,14 +739,23 @@ class AlarmUpdateRequest(BaseModel):
 
 
 @app.patch('/api/alarms/{alarm_id}')
-def update_alarm(alarm_id: int, req: AlarmUpdateRequest):
+def update_alarm(alarm_id: int, req: AlarmUpdateRequest, request: Request):
     if req.status not in ('已处理', '已驳回'):
         raise HTTPException(status_code=400, detail='无效的处理状态')
-    if not db.query('SELECT id FROM alarms WHERE id = %s', (alarm_id,)):
+    rows = db.query('SELECT id, status, violation_type, location FROM alarms WHERE id = %s', (alarm_id,))
+    if not rows:
         raise HTTPException(status_code=404, detail='告警不存在')
+    old = rows[0]
     db.execute(
         'UPDATE alarms SET status = %s, remark = %s WHERE id = %s',
         (req.status, req.remark, alarm_id)
+    )
+    # R10：告警处理 / 误报驳回留痕
+    write_op_log(
+        request.state.user.get('username', ''),
+        '告警处理' if req.status == '已处理' else '误报驳回',
+        f'告警 HZ{alarm_id:05d}（{old["violation_type"]} / {old["location"] or "未分配点位"}）'
+        f'：{old["status"]} → {req.status}；备注：{req.remark or "无"}'
     )
     return {'status': 'ok'}
 
@@ -781,7 +790,7 @@ def get_evidences(
 
 # ==================== HTTP：取证图片下载 /api/evidences/{id}/image ====================
 @app.get('/api/evidences/{evidence_id}/image')
-def get_evidence_image(evidence_id: int):
+def get_evidence_image(evidence_id: int, request: Request):
     from urllib.parse import quote
     rows = db.query('SELECT * FROM evidences WHERE id = %s', (evidence_id,))
     if not rows:
@@ -789,6 +798,12 @@ def get_evidence_image(evidence_id: int):
     ev = rows[0]
     if not os.path.exists(ev['image_path']):
         raise HTTPException(status_code=404, detail='图片文件不存在')
+    # R10：证据下载属敏感操作，记录操作人
+    write_op_log(
+        request.state.user.get('username', ''),
+        '证据下载',
+        f'取证记录 #{evidence_id}（{ev["ev_time"]} / {ev["violation_type"]}）图片下载'
+    )
     watermark = quote(f"{ev['ev_time']}|{ev['violation_type']}")
     return FileResponse(
         ev['image_path'],
@@ -869,7 +884,7 @@ def get_devices(
 
 # ==================== HTTP：新增设备 ====================
 @app.post('/api/devices')
-def create_device(req: DeviceRequest):
+def create_device(req: DeviceRequest, request: Request):
     if db.query('SELECT id FROM devices WHERE code = %s', (req.code,)):
         raise HTTPException(status_code=400, detail='设备编号已存在')
     new_id = db.execute(
@@ -878,12 +893,14 @@ def create_device(req: DeviceRequest):
         (req.code, req.name, req.type, req.location, req.workshop, req.ip,
          req.online_status, req.ai_enabled)
     )
+    write_op_log(request.state.user.get('username', ''), '设备新增',
+                 f'新增设备 {req.code}（{req.name}，{req.workshop or "未分组"} / {req.location or "未填点位"}）')
     return {'status': 'ok', 'id': new_id}
 
 
 # ==================== HTTP：编辑设备 ====================
 @app.put('/api/devices/{device_id}')
-def update_device(device_id: int, req: DeviceRequest):
+def update_device(device_id: int, req: DeviceRequest, request: Request):
     if not db.query('SELECT id FROM devices WHERE id = %s', (device_id,)):
         raise HTTPException(status_code=404, detail='设备不存在')
     if db.query('SELECT id FROM devices WHERE code = %s AND id <> %s', (req.code, device_id)):
@@ -894,15 +911,21 @@ def update_device(device_id: int, req: DeviceRequest):
         (req.code, req.name, req.type, req.location, req.workshop, req.ip,
          req.online_status, req.ai_enabled, device_id)
     )
+    write_op_log(request.state.user.get('username', ''), '设备修改',
+                 f'修改设备 {req.code}（{req.name}，{req.workshop or "未分组"} / {req.location or "未填点位"}）')
     return {'status': 'ok'}
 
 
 # ==================== HTTP：删除设备 ====================
 @app.delete('/api/devices/{device_id}')
-def delete_device(device_id: int):
-    if not db.query('SELECT id FROM devices WHERE id = %s', (device_id,)):
+def delete_device(device_id: int, request: Request):
+    rows = db.query('SELECT id, code, name FROM devices WHERE id = %s', (device_id,))
+    if not rows:
         raise HTTPException(status_code=404, detail='设备不存在')
+    old = rows[0]
     db.execute('DELETE FROM devices WHERE id = %s', (device_id,))
+    write_op_log(request.state.user.get('username', ''), '设备删除',
+                 f'删除设备 {old["code"]}（{old["name"]}）')
     return {'status': 'ok'}
 
 
@@ -969,12 +992,25 @@ def read_session(request: Request):
     return sess
 
 
+def write_op_log(username: str, op_type: str, detail: str):
+    """R10：关键操作留痕，写入 op_logs（失败不影响主流程）"""
+    try:
+        db.execute(
+            'INSERT INTO op_logs (op_time, username, op_type, detail) VALUES (%s, %s, %s, %s)',
+            (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), username or '', op_type, detail or '')
+        )
+    except Exception as e:
+        logging.warning(f'[op_log] 写入失败：{e}')
+
+
 def allowed_roles(method: str, path: str):
     """接口允许的角色；返回 None 表示所有已登录角色可用"""
     if path in ('/api/logout', '/api/me'):
         return None
     if path.startswith('/api/config'):
         return [ROLE_ADMIN]                        # 系统配置仅超级管理员可见可改
+    if path.startswith('/api/logs'):
+        return [ROLE_ADMIN]                        # 操作日志仅超级管理员可查
     if path.startswith('/api/alarms/export'):
         return [ROLE_ADMIN, ROLE_SAFETY]           # 台账导出属于报表能力，查看员不可用
     if method == 'GET':
@@ -1065,6 +1101,7 @@ def login(req: LoginRequest):
         raise HTTPException(status_code=401, detail='账号或密码错误')
     user = rows[0]
     token = create_session(user['username'], user['role'])
+    write_op_log(user['username'], '登录', f'登录成功（角色：{user["role"]}）')
     return {'status': 'ok', 'token': token, 'username': user['username'], 'role': user['role']}
 
 
@@ -1072,7 +1109,9 @@ def login(req: LoginRequest):
 def logout(request: Request):
     auth = request.headers.get('authorization', '')
     if auth.lower().startswith('bearer '):
-        SESSIONS.pop(auth[7:].strip(), None)
+        sess = SESSIONS.pop(auth[7:].strip(), None)
+        if sess:
+            write_op_log(sess['username'], '登出', '退出登录')
     return {'status': 'ok'}
 
 
@@ -1141,12 +1180,54 @@ def update_system_config(req: ConfigUpdateRequest, request: Request):
 
     # 配置变更留痕（R10 操作日志页会展示这些记录）
     if changes:
-        db.execute(
-            'INSERT INTO op_logs (op_time, username, op_type, detail) VALUES (%s, %s, %s, %s)',
-            (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-             request.state.user.get('username', ''), '配置修改', '；'.join(changes))
-        )
+        write_op_log(request.state.user.get('username', ''), '配置修改', '；'.join(changes))
     return {'status': 'ok', 'changed': len(changes), 'config': get_config()}
+
+
+# ==================== R10 操作日志：筛选项 / 分页查询 ====================
+@app.get('/api/logs/filters')
+def get_log_filters():
+    """筛选下拉数据：日志里已出现过的操作类型与操作用户"""
+    op_types = [r['op_type'] for r in db.query(
+        'SELECT DISTINCT op_type FROM op_logs ORDER BY op_type')]
+    usernames = [r['username'] for r in db.query(
+        'SELECT DISTINCT username FROM op_logs ORDER BY username')]
+    return {'status': 'ok', 'op_types': op_types, 'usernames': usernames}
+
+
+@app.get('/api/logs')
+def get_logs(
+    start_time: str = '',
+    end_time: str = '',
+    username: str = '',
+    op_type: str = '',
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """操作日志分页查询（仅超级管理员），支持时间 / 用户 / 操作类型筛选"""
+    where = []
+    params = []
+    if start_time:
+        where.append('op_time >= %s')
+        params.append(start_time)
+    if end_time:
+        where.append('op_time <= %s')
+        params.append(end_time)
+    if username:
+        where.append('username = %s')
+        params.append(username)
+    if op_type:
+        where.append('op_type = %s')
+        params.append(op_type)
+
+    where_sql = (' WHERE ' + ' AND '.join(where)) if where else ''
+    total = db.query(f'SELECT COUNT(*) AS c FROM op_logs{where_sql}', params)[0]['c']
+    items = db.query(
+        f'SELECT id, op_time, username, op_type, detail FROM op_logs{where_sql} '
+        'ORDER BY op_time DESC, id DESC LIMIT %s OFFSET %s',
+        params + [page_size, (page - 1) * page_size]
+    )
+    return {'status': 'ok', 'total': total, 'page': page, 'page_size': page_size, 'items': items}
 
 
 # ==================== 静态资源（必须放最后） ====================

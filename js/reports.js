@@ -85,7 +85,7 @@ async function loadTable() {
     const statusCls = 'tag ' + (STATUS_CLASS[a.status] || 'tag-status-rejected');
     return '<tr>' +
       '<td class="dim">HZ' + String(a.id).padStart(5, '0') + '</td>' +
-      '<td class="dim">' + escapeHtml(a.alarm_time) + '</td>' +
+      '<td class="dim">' + escapeHtml(String(a.alarm_time || '').replace('T', ' ')) + '</td>' +
       '<td>' + escapeHtml(a.location || '未分配点位') + '</td>' +
       '<td>' + escapeHtml(a.violation_type) + '</td>' +
       '<td><span class="' + statusCls + '">' + escapeHtml(a.status) + '</span></td>' +

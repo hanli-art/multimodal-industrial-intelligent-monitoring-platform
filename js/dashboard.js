@@ -40,7 +40,7 @@ function renderRecent(items) {
     const levelCls = 'tag tag-level-' + a.level;
     const statusCls = 'tag ' + (STATUS_CLASS[a.status] || 'tag-status-rejected');
     return '<tr>' +
-      '<td class="dim">' + escapeHtml(a.alarm_time) + '</td>' +
+      '<td class="dim">' + escapeHtml(String(a.alarm_time || '').replace('T', ' ')) + '</td>' +
       '<td>' + escapeHtml(a.location || '未分配点位') + '</td>' +
       '<td>' + escapeHtml(a.violation_type) + '</td>' +
       '<td><span class="' + levelCls + '">' + escapeHtml(LEVEL_TEXT[a.level] || a.level) + '</span></td>' +

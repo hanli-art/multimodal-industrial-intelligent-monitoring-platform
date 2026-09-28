@@ -42,7 +42,7 @@
   function can(perm) {
     var role = (getUser() || {}).role || '';
     if (!role) return false;
-    if (perm === 'device' || perm === 'settings') return role === ROLE_ADMIN;
+    if (perm === 'device' || perm === 'settings' || perm === 'logs') return role === ROLE_ADMIN;
     if (perm === 'report') return role === ROLE_ADMIN || role === ROLE_SAFETY;
     if (perm === 'alarm_handle' || perm === 'evidence') {
       return role === ROLE_ADMIN || role === ROLE_SAFETY;
