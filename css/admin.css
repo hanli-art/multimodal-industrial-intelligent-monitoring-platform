@@ -893,32 +893,71 @@ a { text-decoration: none; color: inherit; }
 
 .range-tip { font-size: 12px; color: var(--admin-text-dim); }
 
-/* ===== 响应式 ===== */
+/* ===== 响应式（R11：手机宽度基础适配） ===== */
 @media (max-width: 860px) {
   .admin-layout { flex-direction: column; }
+
+  /* 侧边栏改为横排：首行 logo + 用户信息，导航整行换到下一行 */
   .admin-sidebar {
     width: 100%;
     height: auto;
     position: static;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     border-right: none;
     border-bottom: 1px solid var(--admin-border);
   }
-  .admin-logo { border-bottom: none; padding: 12px 16px; }
-  .admin-menu { display: flex; flex-wrap: wrap; padding: 0; }
+  .admin-logo { border-bottom: none; padding: 12px 16px; font-size: 15px; }
+  .admin-menu {
+    display: flex;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+    order: 3;
+    padding: 0;
+    border-top: 1px solid var(--admin-border);
+  }
   .admin-menu .menu-group { display: none; }
   .admin-menu a { padding: 10px 14px; border-left: none; border-bottom: 2px solid transparent; }
   .admin-menu a.active { border-left: none; border-bottom-color: var(--admin-primary); }
+  .admin-user {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    padding: 0 16px;
+    border-top: none;
+  }
+  .admin-user a { margin-top: 0; }
+
   .admin-main { padding: 14px; }
+
+  /* 筛选栏：每项独占一行，输入框不再被压缩 */
+  .filter-bar { gap: 10px; }
   .filter-item { width: 100%; }
-  .filter-item input, .filter-item select { width: 100%; }
+  .filter-item input,
+  .filter-item select { width: 100%; min-width: 0; }
+  .filter-bar .btn { flex: 1; }
+  .filter-bar .tabs { width: 100%; }
+  .filter-bar .tab { flex: 1; }
+
   .device-layout { flex-direction: column; }
   .device-tree-card { width: 100%; }
   .form-grid { grid-template-columns: 1fr; }
-  .admin-user { border-top: none; padding: 10px 14px; }
   .setting-item { flex-direction: column; align-items: flex-start; }
-  .conf-range-row { flex: 1; width: 100%; }
+  .conf-range-row { flex: 1 1 auto; width: 100%; }
   .stat-grid { grid-template-columns: 1fr 1fr; }
   .chart-grid { grid-template-columns: 1fr; }
+  .chart-box { height: 260px; }
+  .pagination { justify-content: center; flex-wrap: wrap; }
+}
+
+/* 窄屏手机（≤560px）进一步收敛字号与留白 */
+@media (max-width: 560px) {
+  .admin-main { padding: 12px; }
+  .admin-page-title { font-size: 16px; }
+  .stat-grid { grid-template-columns: 1fr; }
+  .stat-value { font-size: 22px; }
+  .modal-footer { flex-direction: column-reverse; }
+  .modal-footer .btn { width: 100%; }
 }
