@@ -66,6 +66,38 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+# ==================== 告警广播连接管理（R5） ====================
+class NotifyManager:
+    """维护 /ws/notify 的在线前端连接，把新告警实时广播给所有订阅端"""
+
+    def __init__(self):
+        self.connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.connections.append(websocket)
+        logging.info(f'告警推送通道已连接：当前订阅数:{len(self.connections)}')
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.connections:
+            self.connections.remove(websocket)
+        logging.info(f'告警推送通道已断开：当前订阅数:{len(self.connections)}')
+
+    async def broadcast(self, message: dict):
+        """逐个推送，推失败的连接直接剔除"""
+        dead = []
+        for ws in list(self.connections):
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+
+notify_manager = NotifyManager()
+
+
 # ==================== 请求体 ====================
 class DetectRequest(BaseModel):
     base64_image: str = Field(..., min_length=100, description='Base64格式图片')
@@ -223,21 +255,35 @@ _last_alarm_ts = {}
 
 
 def save_alarm(violations, summary, pure_b64):
-    """把违规结果写入 alarms 表并抓拍存证，同一类型 30 秒内防抖"""
+    """把违规结果写入 alarms 表并抓拍存证，同一类型 30 秒内防抖；返回本轮新建的告警列表"""
     now = time.time()
+    created = []
     for v in violations:
         if now - _last_alarm_ts.get(v, 0) < ALARM_DEBOUNCE:
             continue
         _last_alarm_ts[v] = now
         level = VIOLATION_LEVEL.get(v, 2)
         alarm_time = datetime.now()
+        alarm_time_str = alarm_time.strftime('%Y-%m-%d %H:%M:%S')
         alarm_id = db.execute(
             'INSERT INTO alarms (alarm_time, location, violation_type, level, confidence, summary, status) '
             'VALUES (%s, %s, %s, %s, %s, %s, %s)',
-            (alarm_time.strftime('%Y-%m-%d %H:%M:%S'), '', v, level, 0, summary, '待处理')
+            (alarm_time_str, '', v, level, 0, summary, '待处理')
         )
         image_path = save_evidence(alarm_id, v, alarm_time, pure_b64)
         db.execute('UPDATE alarms SET image_path = %s WHERE id = %s', (image_path, alarm_id))
+        created.append({
+            'id': alarm_id,
+            'alarm_time': alarm_time_str,
+            'location': '',
+            'violation_type': v,
+            'level': level,
+            'confidence': 0,
+            'summary': summary,
+            'status': '待处理',
+            'image_path': image_path,
+        })
+    return created
 
 
 def save_evidence(alarm_id, violation_type, alarm_time, pure_b64):
@@ -354,9 +400,15 @@ async def websocket_qwen(websocket: WebSocket):
             if '爬墙' in result_text or '攀爬' in result_text:
                 violations.append('攀爬围墙')
 
-            # 检出违规时写入告警表并抓拍存证（带防抖）
+            # 检出违规时写入告警表并抓拍存证（带防抖），随后广播给所有在线前端
             if violations:
-                save_alarm(violations, result_text, pure_b64)
+                new_alarms = save_alarm(violations, result_text, pure_b64)
+                if new_alarms:
+                    await notify_manager.broadcast({
+                        'status': 'ok',
+                        'type': 'alarm',
+                        'alarms': new_alarms,
+                    })
 
             # 回推给前端
             await websocket.send_json({
@@ -374,6 +426,21 @@ async def websocket_qwen(websocket: WebSocket):
         pass
     except Exception as e:
         logging.error(f'/ws/qwen 异常: {e}')
+
+
+# ==================== WebSocket 3：/ws/notify —— 实时告警广播（R5） ====================
+@app.websocket('/ws/notify')
+async def websocket_notify(websocket: WebSocket):
+    await notify_manager.connect(websocket)
+    try:
+        while True:
+            # 该通道只做单向推送，前端心跳内容直接忽略，仅用于保活
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        notify_manager.disconnect(websocket)
+    except Exception as e:
+        logging.error(f'/ws/notify 异常: {e}')
+        notify_manager.disconnect(websocket)
 
 
 # ==================== HTTP：/detect（保留，做兼容） ====================
@@ -452,6 +519,19 @@ def get_alarm_summary():
         'pending_count': pending_count,
         'level_counts': level_counts,
     }
+
+
+# ==================== HTTP：最近未处理告警 /api/alarms/recent（R5 顶部告警条） ====================
+@app.get('/api/alarms/recent')
+def get_recent_alarms(limit: int = Query(10, ge=1, le=50)):
+    """最近 N 条未处理告警，一级置顶"""
+    items = db.query(
+        'SELECT id, alarm_time, location, violation_type, level, status, image_path '
+        "FROM alarms WHERE status = '待处理' "
+        'ORDER BY level ASC, alarm_time DESC, id DESC LIMIT %s',
+        (limit,)
+    )
+    return {'status': 'ok', 'total': len(items), 'items': items}
 
 
 # ==================== HTTP：告警处理 /api/alarms/{id} ====================

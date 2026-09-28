@@ -844,3 +844,190 @@ select:focus {
 }
 .qwen-list.danger li{color:#ff7a7a;}
 .qwen-safe{color:#3ddc97;letter-spacing:1px;padding:4px 0;}
+
+/* ============================================
+   R5 实时告警推送：滚动告警条 + 弹窗 + 静音开关
+   ============================================ */
+
+/* 静音按钮 */
+.mute-btn {
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  color: var(--cyan);
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 3px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mute-btn:hover {
+  background: rgba(0, 240, 255, 0.2);
+}
+
+.mute-btn.muted {
+  color: var(--text-dim);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* 顶部滚动告警条 */
+.alarm-ticker {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  margin: 8px 16px 0;
+  background: rgba(12, 18, 34, 0.9);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  border-radius: 4px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.alarm-ticker::before {
+  content: '🚨 未处理告警';
+  flex-shrink: 0;
+  color: var(--neon-red);
+  font-size: 11px;
+  letter-spacing: 1px;
+  margin-right: 12px;
+}
+
+.ticker-track {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.ticker-track > div {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* 内容超出容器宽度时才滚动（JS 判断后加 marquee） */
+.ticker-track.marquee > div {
+  animation: tickerScroll 22s linear infinite;
+}
+
+.ticker-track.marquee:hover > div {
+  animation-play-state: paused;
+}
+
+@keyframes tickerScroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.ticker-item {
+  display: inline-block;
+  font-size: 12px;
+  margin-right: 32px;
+  color: var(--text);
+}
+
+.ticker-item .tt-time { color: var(--text-dim); margin-right: 6px; }
+.ticker-item .tt-type { margin-right: 6px; }
+.ticker-item .tt-loc { color: var(--text-dim); }
+.ticker-item.level-1 .tt-type { color: var(--neon-red); font-weight: 700; }
+.ticker-item.level-2 .tt-type { color: var(--amber); }
+.ticker-item.level-3 .tt-type { color: var(--cyan); }
+
+.ticker-empty {
+  color: var(--text-dim);
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+/* 右下角实时告警弹窗 */
+.alarm-pop-stack {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.alarm-pop {
+  pointer-events: auto;
+  width: 320px;
+  background: rgba(10, 16, 30, 0.96);
+  border: 1px solid var(--neon-red);
+  border-left: 4px solid var(--neon-red);
+  border-radius: 6px;
+  box-shadow: 0 0 18px rgba(255, 51, 102, 0.25);
+  overflow: hidden;
+  animation: popIn 0.25s ease-out;
+}
+
+.alarm-pop.level-2 { border-color: var(--amber); border-left-color: var(--amber); box-shadow: 0 0 18px rgba(245, 158, 11, 0.2); }
+.alarm-pop.level-3 { border-color: var(--cyan); border-left-color: var(--cyan); box-shadow: 0 0 18px rgba(0, 240, 255, 0.15); }
+
+@keyframes popIn {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+.alarm-pop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(255, 51, 102, 0.12);
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--neon-red);
+  font-weight: 700;
+}
+
+.alarm-pop.level-2 .alarm-pop-header { background: rgba(245, 158, 11, 0.12); color: var(--amber); }
+.alarm-pop.level-3 .alarm-pop-header { background: rgba(0, 240, 255, 0.1); color: var(--cyan); }
+
+.alarm-pop-close {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0.7;
+}
+
+.alarm-pop-close:hover { opacity: 1; }
+
+.alarm-pop-body {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.alarm-pop-body img {
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
+.alarm-pop-info { flex: 1; min-width: 0; }
+
+.alarm-pop-type {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.alarm-pop-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  line-height: 1.6;
+}

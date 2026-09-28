@@ -21,6 +21,8 @@
     <span class="badge" id="wsBadge">ONLINE</span>
   </div>
   <div class="header-right">
+    <button id="btnMute" class="mute-btn" title="开启 / 关闭语音播报">🔔 语音</button>
+    <span class="header-sep">|</span>
     <a href="./alarms.html" style="color:#00f0ff;text-decoration:none;font-size:11px;letter-spacing:1px;">告警管理</a>
     <span class="header-sep">|</span>
     <span class="sys-node">NODE-01</span>
@@ -30,6 +32,11 @@
     <span id="clock">--:--:--</span>
   </div>
 </header>
+
+<!-- 滚动告警条：最近 10 条未处理告警，一级红色置顶（R5） -->
+<div class="alarm-ticker" id="alarmTicker">
+  <div class="ticker-empty">暂无未处理告警</div>
+</div>
 
 <!-- 主体 -->
 <div class="container">
@@ -125,6 +132,10 @@
 
 </div>
 
+<!-- 实时告警弹窗容器（R5） -->
+<div class="alarm-pop-stack" id="alarmPopStack"></div>
+
 <script src="./js/app.js"></script>
+<script src="./js/notify.js"></script>
 </body>
 </html>
