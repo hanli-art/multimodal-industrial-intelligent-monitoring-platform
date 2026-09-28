@@ -46,7 +46,7 @@ async function loadAlarms() {
   const data = await res.json();
   if (data.status !== 'ok') {
     document.getElementById('tbody').innerHTML =
-      `<tr><td colspan="7" class="empty-state">${escapeHtml(data.message || '加载失败')}</td></tr>`;
+      `<tr><td colspan="8" class="empty-state">${escapeHtml(data.message || '加载失败')}</td></tr>`;
     return;
   }
   total = data.total;
@@ -57,7 +57,7 @@ async function loadAlarms() {
 function renderTable(items) {
   const tbody = document.getElementById('tbody');
   if (!items.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">暂无告警记录</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">暂无告警记录</td></tr>';
     return;
   }
   tbody.innerHTML = items.map(function (a) {
@@ -65,6 +65,10 @@ function renderTable(items) {
     const levelText = LEVEL_TEXT[a.level] || a.level;
     const statusTag = STATUS_TAG[a.status] || '';
     const confidence = a.confidence ? escapeHtml(a.confidence) : '—';
+    const imgUrl = a.image_path ? encodeURI('/' + a.image_path) : '';
+    const snapshot = imgUrl
+      ? `<img src="${imgUrl}" style="width:48px;height:36px;object-fit:cover;cursor:pointer;border-radius:2px;" onclick="previewImage('${imgUrl}')" alt="抓拍图">`
+      : '<span style="font-size:12px;color:#9ca3af;">—</span>';
     const ops = a.status === '待处理'
       ? '<div class="col-ops">' +
         `<button class="btn btn-sm btn-primary" onclick="openModal(${a.id}, '已处理')">标记已处理</button>` +
@@ -77,6 +81,7 @@ function renderTable(items) {
       `<td>${escapeHtml(a.violation_type || '')}</td>` +
       `<td><span class="tag ${levelTag}">${levelText}</span></td>` +
       `<td>${confidence}</td>` +
+      `<td>${snapshot}</td>` +
       `<td><span class="tag ${statusTag}">${escapeHtml(a.status)}</span></td>` +
       `<td>${ops}</td>` +
       '</tr>';
@@ -128,6 +133,12 @@ async function confirmAction() {
   }
 }
 
+/* ==================== 抓拍图预览 ==================== */
+function previewImage(url) {
+  document.getElementById('previewImg').src = url;
+  document.getElementById('imageMask').classList.add('show');
+}
+
 /* ==================== 事件绑定 ==================== */
 document.getElementById('btnSearch').onclick = function () { currentPage = 1; loadAlarms(); };
 document.getElementById('btnReset').onclick = function () {
@@ -143,6 +154,12 @@ document.getElementById('btnCancel').onclick = closeModal;
 document.getElementById('btnConfirm').onclick = confirmAction;
 document.getElementById('modalMask').onclick = function (e) {
   if (e.target.id === 'modalMask') closeModal();
+};
+document.getElementById('btnCloseImage').onclick = function () {
+  document.getElementById('imageMask').classList.remove('show');
+};
+document.getElementById('imageMask').onclick = function (e) {
+  if (e.target.id === 'imageMask') document.getElementById('imageMask').classList.remove('show');
 };
 
 /* ==================== 初始化 ==================== */

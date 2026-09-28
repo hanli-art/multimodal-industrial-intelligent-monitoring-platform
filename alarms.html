@@ -80,12 +80,13 @@
               <th>违规类型</th>
               <th>等级</th>
               <th>置信度</th>
+              <th>抓拍图</th>
               <th>状态</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody id="tbody">
-            <tr><td colspan="7" class="empty-state">加载中...</td></tr>
+            <tr><td colspan="8" class="empty-state">加载中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -107,6 +108,19 @@
     <div class="modal-footer">
       <button class="btn" id="btnCancel">取消</button>
       <button class="btn btn-primary" id="btnConfirm">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- 抓拍图预览弹窗 -->
+<div class="modal-mask" id="imageMask">
+  <div class="modal" style="width:640px;">
+    <div class="modal-header">抓拍图预览</div>
+    <div class="modal-body" style="text-align:center;">
+      <img id="previewImg" style="max-width:100%;max-height:62vh;">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="btnCloseImage">关闭</button>
     </div>
   </div>
 </div>

@@ -222,19 +222,39 @@ ALARM_DEBOUNCE = 30
 _last_alarm_ts = {}
 
 
-def save_alarm(violations, summary):
-    """把违规结果写入 alarms 表，同一类型 30 秒内防抖"""
+def save_alarm(violations, summary, pure_b64):
+    """把违规结果写入 alarms 表并抓拍存证，同一类型 30 秒内防抖"""
     now = time.time()
     for v in violations:
         if now - _last_alarm_ts.get(v, 0) < ALARM_DEBOUNCE:
             continue
         _last_alarm_ts[v] = now
         level = VIOLATION_LEVEL.get(v, 2)
-        db.execute(
+        alarm_time = datetime.now()
+        alarm_id = db.execute(
             'INSERT INTO alarms (alarm_time, location, violation_type, level, confidence, summary, status) '
             'VALUES (%s, %s, %s, %s, %s, %s, %s)',
-            (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), '', v, level, 0, summary, '待处理')
+            (alarm_time.strftime('%Y-%m-%d %H:%M:%S'), '', v, level, 0, summary, '待处理')
         )
+        image_path = save_evidence(alarm_id, v, alarm_time, pure_b64)
+        db.execute('UPDATE alarms SET image_path = %s WHERE id = %s', (image_path, alarm_id))
+
+
+def save_evidence(alarm_id, violation_type, alarm_time, pure_b64):
+    """把抓拍帧落盘并写 evidences 表，返回图片相对路径"""
+    date_dir = alarm_time.strftime('%Y%m%d')
+    filename = f"{alarm_time.strftime('%Y%m%d_%H%M%S')}_{violation_type}.jpg"
+    rel_dir = f'evidence/{date_dir}'
+    os.makedirs(rel_dir, exist_ok=True)
+    filepath = f'{rel_dir}/{filename}'
+    with open(filepath, 'wb') as f:
+        f.write(base64.b64decode(pure_b64))
+    db.execute(
+        'INSERT INTO evidences (alarm_id, image_path, ev_time, location, violation_type, confidence) '
+        'VALUES (%s, %s, %s, %s, %s, %s)',
+        (alarm_id, filepath, alarm_time.strftime('%Y-%m-%d %H:%M:%S'), '', violation_type, 0)
+    )
+    return filepath
 
 
 # ==================== FastAPI 实例 ====================
@@ -334,9 +354,9 @@ async def websocket_qwen(websocket: WebSocket):
             if '爬墙' in result_text or '攀爬' in result_text:
                 violations.append('攀爬围墙')
 
-            # 检出违规时写入告警表（带防抖）
+            # 检出违规时写入告警表并抓拍存证（带防抖）
             if violations:
-                save_alarm(violations, result_text)
+                save_alarm(violations, result_text, pure_b64)
 
             # 回推给前端
             await websocket.send_json({
@@ -385,26 +405,28 @@ def get_alarms(
     where = []
     params = []
     if start_time:
-        where.append('alarm_time >= %s')
+        where.append('a.alarm_time >= %s')
         params.append(start_time)
     if end_time:
-        where.append('alarm_time <= %s')
+        where.append('a.alarm_time <= %s')
         params.append(end_time)
     if violation_type:
-        where.append('violation_type = %s')
+        where.append('a.violation_type = %s')
         params.append(violation_type)
     if level:
-        where.append('level = %s')
+        where.append('a.level = %s')
         params.append(level)
     if status:
-        where.append('status = %s')
+        where.append('a.status = %s')
         params.append(status)
 
     where_sql = (' WHERE ' + ' AND '.join(where)) if where else ''
-    total = db.query(f'SELECT COUNT(*) AS c FROM alarms{where_sql}', params)[0]['c']
+    total = db.query(f'SELECT COUNT(*) AS c FROM alarms a{where_sql}', params)[0]['c']
     offset = (page - 1) * page_size
     items = db.query(
-        f'SELECT * FROM alarms{where_sql} ORDER BY alarm_time DESC LIMIT %s OFFSET %s',
+        f'SELECT a.*, e.id AS evidence_id FROM alarms a '
+        f'LEFT JOIN evidences e ON e.alarm_id = a.id{where_sql} '
+        f'ORDER BY a.alarm_time DESC, a.id DESC LIMIT %s OFFSET %s',
         params + [page_size, offset]
     )
     return {'status': 'ok', 'total': total, 'page': page, 'page_size': page_size, 'items': items}
@@ -449,6 +471,53 @@ def update_alarm(alarm_id: int, req: AlarmUpdateRequest):
         (req.status, req.remark, alarm_id)
     )
     return {'status': 'ok'}
+
+
+# ==================== HTTP：取证检索 /api/evidences ====================
+@app.get('/api/evidences')
+def get_evidences(
+    start_time: str = '',
+    end_time: str = '',
+    location: str = '',
+    violation_type: str = '',
+):
+    where = []
+    params = []
+    if start_time:
+        where.append('ev_time >= %s')
+        params.append(start_time)
+    if end_time:
+        where.append('ev_time <= %s')
+        params.append(end_time)
+    if location:
+        where.append('location = %s')
+        params.append(location)
+    if violation_type:
+        where.append('violation_type = %s')
+        params.append(violation_type)
+
+    where_sql = (' WHERE ' + ' AND '.join(where)) if where else ''
+    items = db.query(f'SELECT * FROM evidences{where_sql} ORDER BY ev_time DESC', params)
+    return {'status': 'ok', 'total': len(items), 'items': items}
+
+
+# ==================== HTTP：取证图片下载 /api/evidences/{id}/image ====================
+@app.get('/api/evidences/{evidence_id}/image')
+def get_evidence_image(evidence_id: int):
+    from urllib.parse import quote
+    rows = db.query('SELECT * FROM evidences WHERE id = %s', (evidence_id,))
+    if not rows:
+        raise HTTPException(status_code=404, detail='取证记录不存在')
+    ev = rows[0]
+    if not os.path.exists(ev['image_path']):
+        raise HTTPException(status_code=404, detail='图片文件不存在')
+    watermark = quote(f"{ev['ev_time']}|{ev['violation_type']}")
+    return FileResponse(
+        ev['image_path'],
+        media_type='image/jpeg',
+        filename=os.path.basename(ev['image_path']),
+        headers={'X-Evidence-Watermark': watermark},
+    )
 
 
 # ==================== 静态资源（必须放最后） ====================

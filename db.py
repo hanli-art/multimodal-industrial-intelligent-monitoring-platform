@@ -29,12 +29,14 @@ def get_connection():
 
 
 def execute(sql, params=None):
-    """执行写操作（INSERT/UPDATE/DELETE），自动提交"""
+    """执行写操作（INSERT/UPDATE/DELETE），自动提交，返回最后插入行自增 id"""
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(sql, params)
+            last_id = cur.lastrowid
         conn.commit()
+        return last_id
     finally:
         conn.close()
 
