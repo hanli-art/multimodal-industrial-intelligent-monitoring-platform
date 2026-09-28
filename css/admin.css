@@ -668,11 +668,16 @@ a { text-decoration: none; color: inherit; }
 .admin-user a:hover { text-decoration: underline; }
 
 /* ===== 系统配置页（R9） ===== */
+/* 整页内容居中为定宽列，避免宽屏下贴左、开关离标签过远 */
+.settings-page {
+  max-width: 780px;
+  margin: 0 auto;
+}
+
 .settings-stack {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 780px;
 }
 
 .settings-card-head {
