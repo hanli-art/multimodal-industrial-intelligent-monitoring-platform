@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>设备管理 - 多模态工业智能监控平台</title>
+  <link rel="stylesheet" href="./css/admin.css">
+</head>
+<body>
+
+<div class="admin-layout">
+
+  <!-- 左侧导航 -->
+  <aside class="admin-sidebar">
+    <div class="admin-logo">工业智能监控平台</div>
+    <nav class="admin-menu">
+      <div class="menu-group">监控</div>
+      <a href="./index.html">实时监控</a>
+      <div class="menu-group">安全</div>
+      <a href="./alarms.html">告警管理</a>
+      <div class="menu-group">设备</div>
+      <a href="./devices.html" class="active">设备管理</a>
+    </nav>
+  </aside>
+
+  <!-- 右侧内容 -->
+  <main class="admin-main">
+    <h1 class="admin-page-title">设备管理</h1>
+    <p class="admin-page-sub">设备统一台账 · 按车间分组 · 在线状态心跳模拟</p>
+
+    <div class="device-layout">
+
+      <!-- 左：车间分组树 -->
+      <div class="admin-card device-tree-card">
+        <div class="tree-header">车间分组</div>
+        <ul class="tree-list" id="treeList">
+          <li class="tree-item active"><span class="tree-name">全部设备</span><span class="tree-count">0</span></li>
+        </ul>
+        <div class="hb-box">
+          <label class="hb-switch">
+            <input type="checkbox" id="hbSwitch" checked>
+            <span>心跳模拟上报</span>
+          </label>
+          <p class="hb-tip" id="hbTip">每 10 秒为「基准在线」的设备上报心跳；停止后 60 秒内自动转为离线。</p>
+        </div>
+      </div>
+
+      <!-- 右：设备列表 -->
+      <div class="admin-card device-list-card">
+        <div class="filter-bar">
+          <div class="filter-item">
+            <label>关键字</label>
+            <input type="text" id="keyword" placeholder="名称 / 编号 / IP">
+          </div>
+          <div class="filter-item">
+            <label>在线状态</label>
+            <select id="onlineFilter">
+              <option value="">全部</option>
+              <option value="1">在线</option>
+              <option value="0">离线</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="btnSearch">查询</button>
+          <button class="btn" id="btnReset">重置</button>
+          <button class="btn btn-primary" id="btnAdd" style="margin-left:auto;">+ 新增设备</button>
+        </div>
+
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>设备名称</th>
+                <th>设备编号</th>
+                <th>类型</th>
+                <th>所属车间</th>
+                <th>安装位置</th>
+                <th>IP地址</th>
+                <th>在线状态</th>
+                <th>AI开关</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="9" class="empty-state">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 新增 / 编辑弹窗 -->
+<div class="modal-mask" id="formMask">
+  <div class="modal" style="width:540px;">
+    <div class="modal-header" id="formTitle">新增设备</div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-item">
+          <label>设备编号 <em>*</em></label>
+          <input type="text" id="fCode" placeholder="如 DEV-004">
+        </div>
+        <div class="form-item">
+          <label>设备名称 <em>*</em></label>
+          <input type="text" id="fName" placeholder="如 车间东门摄像头">
+        </div>
+        <div class="form-item">
+          <label>设备类型</label>
+          <input type="text" id="fType" placeholder="如 摄像头">
+        </div>
+        <div class="form-item">
+          <label>所属车间</label>
+          <input type="text" id="fWorkshop" placeholder="如 1号车间">
+        </div>
+        <div class="form-item">
+          <label>安装位置</label>
+          <input type="text" id="fLocation" placeholder="如 1号车间东门">
+        </div>
+        <div class="form-item">
+          <label>IP地址</label>
+          <input type="text" id="fIp" placeholder="如 192.168.1.104">
+        </div>
+        <div class="form-item">
+          <label>基准在线状态</label>
+          <select id="fOnline">
+            <option value="1">在线</option>
+            <option value="0">离线</option>
+          </select>
+        </div>
+        <div class="form-item">
+          <label>AI 分析开关</label>
+          <select id="fAi">
+            <option value="1">开启</option>
+            <option value="0">关闭</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="btnFormCancel">取消</button>
+      <button class="btn btn-primary" id="btnFormSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 删除二次确认 -->
+<div class="modal-mask" id="delMask">
+  <div class="modal">
+    <div class="modal-header">删除确认</div>
+    <div class="modal-body">
+      <p id="delText" style="font-size:13px;line-height:22px;">确定删除该设备吗？删除后不可恢复。</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="btnDelCancel">取消</button>
+      <button class="btn btn-danger" id="btnDelConfirm">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<script src="./js/devices.js"></script>
+</body>
+</html>

@@ -603,6 +603,126 @@ def get_evidence_image(evidence_id: int):
     )
 
 
+# ==================== R6 设备管理：台账 CRUD + 在线状态模拟 ====================
+# 在线判定：online_status=1 且 60 秒内有过心跳；设备页会定时调心跳接口模拟上报
+OFFLINE_SECONDS = 60
+
+_ONLINE_CASE = (
+    'CASE WHEN d.online_status = 1 AND d.last_heartbeat IS NOT NULL '
+    f'AND TIMESTAMPDIFF(SECOND, d.last_heartbeat, NOW()) <= {OFFLINE_SECONDS} '
+    'THEN 1 ELSE 0 END'
+)
+
+
+class DeviceRequest(BaseModel):
+    code: str = Field(..., min_length=1, max_length=50, description='设备编号')
+    name: str = Field(..., min_length=1, max_length=100, description='设备名称')
+    type: str = Field('', max_length=50)
+    location: str = Field('', max_length=200)
+    workshop: str = Field('', max_length=100)
+    ip: str = Field('', max_length=50)
+    online_status: int = Field(0, ge=0, le=1, description='基准在线状态 0离线 1在线')
+    ai_enabled: int = Field(1, ge=0, le=1, description='AI开关 0关 1开')
+
+
+# ==================== HTTP：车间分组（树） /api/devices/workshops ====================
+@app.get('/api/devices/workshops')
+def get_device_workshops():
+    """按车间分组返回设备总数与在线数，供左侧分组树使用"""
+    rows = db.query(
+        f'SELECT d.workshop, COUNT(*) AS total, SUM({_ONLINE_CASE}) AS online_count '
+        'FROM devices d GROUP BY d.workshop ORDER BY d.workshop'
+    )
+    items = [{
+        'workshop': r['workshop'] or '未分组',
+        'total': int(r['total']),
+        'online_count': int(r['online_count'] or 0),
+    } for r in rows]
+    return {'status': 'ok', 'total': sum(i['total'] for i in items), 'items': items}
+
+
+# ==================== HTTP：设备列表 /api/devices ====================
+@app.get('/api/devices')
+def get_devices(
+    workshop: str = '',
+    keyword: str = '',
+    online: int = Query(None, description='按在线状态过滤 0离线 1在线'),
+):
+    where = []
+    params = []
+    if workshop:
+        if workshop == '未分组':
+            where.append("d.workshop = ''")
+        else:
+            where.append('d.workshop = %s')
+            params.append(workshop)
+    if keyword:
+        where.append('(d.name LIKE %s OR d.code LIKE %s OR d.ip LIKE %s)')
+        kw = f'%{keyword}%'
+        params.extend([kw, kw, kw])
+
+    where_sql = (' WHERE ' + ' AND '.join(where)) if where else ''
+    items = db.query(
+        f'SELECT d.*, {_ONLINE_CASE} AS online FROM devices d{where_sql} '
+        'ORDER BY d.workshop, d.code',
+        params
+    )
+    if online in (0, 1):
+        items = [d for d in items if d['online'] == online]
+    return {'status': 'ok', 'total': len(items), 'items': items}
+
+
+# ==================== HTTP：新增设备 ====================
+@app.post('/api/devices')
+def create_device(req: DeviceRequest):
+    if db.query('SELECT id FROM devices WHERE code = %s', (req.code,)):
+        raise HTTPException(status_code=400, detail='设备编号已存在')
+    new_id = db.execute(
+        'INSERT INTO devices (code, name, type, location, workshop, ip, online_status, ai_enabled) '
+        'VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
+        (req.code, req.name, req.type, req.location, req.workshop, req.ip,
+         req.online_status, req.ai_enabled)
+    )
+    return {'status': 'ok', 'id': new_id}
+
+
+# ==================== HTTP：编辑设备 ====================
+@app.put('/api/devices/{device_id}')
+def update_device(device_id: int, req: DeviceRequest):
+    if not db.query('SELECT id FROM devices WHERE id = %s', (device_id,)):
+        raise HTTPException(status_code=404, detail='设备不存在')
+    if db.query('SELECT id FROM devices WHERE code = %s AND id <> %s', (req.code, device_id)):
+        raise HTTPException(status_code=400, detail='设备编号已被其他设备占用')
+    db.execute(
+        'UPDATE devices SET code = %s, name = %s, type = %s, location = %s, workshop = %s, '
+        'ip = %s, online_status = %s, ai_enabled = %s WHERE id = %s',
+        (req.code, req.name, req.type, req.location, req.workshop, req.ip,
+         req.online_status, req.ai_enabled, device_id)
+    )
+    return {'status': 'ok'}
+
+
+# ==================== HTTP：删除设备 ====================
+@app.delete('/api/devices/{device_id}')
+def delete_device(device_id: int):
+    if not db.query('SELECT id FROM devices WHERE id = %s', (device_id,)):
+        raise HTTPException(status_code=404, detail='设备不存在')
+    db.execute('DELETE FROM devices WHERE id = %s', (device_id,))
+    return {'status': 'ok'}
+
+
+# ==================== HTTP：设备心跳上报（在线状态模拟） ====================
+@app.post('/api/devices/{device_id}/heartbeat')
+def device_heartbeat(device_id: int):
+    if not db.query('SELECT id FROM devices WHERE id = %s', (device_id,)):
+        raise HTTPException(status_code=404, detail='设备不存在')
+    db.execute(
+        'UPDATE devices SET online_status = 1, last_heartbeat = NOW() WHERE id = %s',
+        (device_id,)
+    )
+    return {'status': 'ok', 'ts': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+
 # ==================== 静态资源（必须放最后） ====================
 app.mount('/', StaticFiles(directory='.', html=True), name='static')
 

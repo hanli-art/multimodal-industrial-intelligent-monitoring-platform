@@ -14,6 +14,7 @@ SCHEMA_SQL = [
         ip VARCHAR(50) DEFAULT '' COMMENT 'IP地址',
         online_status TINYINT DEFAULT 0 COMMENT '在线状态 0离线 1在线',
         ai_enabled TINYINT DEFAULT 1 COMMENT 'AI开关 0关 1开',
+        last_heartbeat DATETIME DEFAULT NULL COMMENT '最后心跳时间（R6 在线状态模拟）',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设备表'""",
     """CREATE TABLE IF NOT EXISTS alarms (
@@ -64,6 +65,17 @@ SCHEMA_SQL = [
 ]
 
 
+def migrate():
+    """对已存在的旧库补齐后加字段（幂等，可重复执行）"""
+    cols = {r['Field'] for r in db.query('SHOW COLUMNS FROM devices')}
+    if 'last_heartbeat' not in cols:
+        db.execute(
+            "ALTER TABLE devices ADD COLUMN last_heartbeat DATETIME DEFAULT NULL "
+            "COMMENT '最后心跳时间（R6 在线状态模拟）'"
+        )
+        print('[migrate] devices 表已补充 last_heartbeat 列')
+
+
 def seed_devices():
     if db.query('SELECT id FROM devices LIMIT 1'):
         return
@@ -94,6 +106,7 @@ def init():
     db.ensure_database()
     for sql in SCHEMA_SQL:
         db.execute(sql)
+    migrate()
     seed_devices()
     seed_admin()
 

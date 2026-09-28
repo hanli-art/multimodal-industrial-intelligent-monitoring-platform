@@ -373,6 +373,170 @@ a { text-decoration: none; color: inherit; }
   font-size: 13px;
 }
 
+/* ===== 设备管理页（R6）：左分组树 + 右设备列表 ===== */
+.device-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.device-tree-card {
+  width: 230px;
+  flex-shrink: 0;
+}
+
+.tree-header {
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--admin-text-dim);
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.tree-list {
+  list-style: none;
+  padding: 6px 0;
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  color: var(--admin-text);
+}
+
+.tree-item:hover { background: #f3f4f6; }
+
+.tree-item.active {
+  background: #eff6ff;
+  color: var(--admin-primary);
+  border-left-color: var(--admin-primary);
+  font-weight: 600;
+}
+
+.tree-count {
+  font-size: 12px;
+  color: var(--admin-text-dim);
+}
+
+.tree-item.active .tree-count { color: var(--admin-primary); }
+
+.hb-box {
+  padding: 12px 16px;
+  border-top: 1px solid var(--admin-border);
+}
+
+.hb-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.hb-tip {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--admin-text-dim);
+}
+
+.device-list-card {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 在线状态圆点 */
+.status-online,
+.status-offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.status-online { color: var(--status-done); }
+.status-offline { color: var(--level-1); }
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.dot-online { background: #22c55e; }
+.dot-offline { background: var(--level-1); }
+
+/* AI 开关标签 */
+.tag-ai-on {
+  background: #eff6ff;
+  color: var(--admin-primary);
+  border: 1px solid #bfdbfe;
+}
+
+.tag-ai-off {
+  background: #f3f4f6;
+  color: var(--admin-text-dim);
+  border: 1px solid var(--admin-border);
+}
+
+.btn-danger {
+  color: var(--level-1);
+  border-color: #f3c2bf;
+}
+
+.btn-danger:hover {
+  background: #fef2f2;
+  border-color: var(--level-1);
+  color: var(--level-1);
+}
+
+/* 表单网格（弹窗内） */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 14px;
+}
+
+.form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-item label {
+  font-size: 12px;
+  color: var(--admin-text-dim);
+}
+
+.form-item label em {
+  color: var(--level-1);
+  font-style: normal;
+}
+
+.form-item input,
+.form-item select {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--admin-text);
+  background: #fff;
+  outline: none;
+}
+
+.form-item input:focus,
+.form-item select:focus { border-color: var(--admin-primary); }
+
 /* ===== 响应式 ===== */
 @media (max-width: 860px) {
   .admin-layout { flex-direction: column; }
@@ -393,4 +557,7 @@ a { text-decoration: none; color: inherit; }
   .admin-main { padding: 14px; }
   .filter-item { width: 100%; }
   .filter-item input, .filter-item select { width: 100%; }
+  .device-layout { flex-direction: column; }
+  .device-tree-card { width: 100%; }
+  .form-grid { grid-template-columns: 1fr; }
 }
