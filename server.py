@@ -1,9 +1,13 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Request
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 import base64
+import hashlib
+import hmac
+import random
+import secrets
 from io import BytesIO
 from PIL import Image
 import numpy as np
@@ -721,6 +725,168 @@ def device_heartbeat(device_id: int):
         (device_id,)
     )
     return {'status': 'ok', 'ts': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+
+# ==================== R8 登录鉴权与三级角色权限 ====================
+# 角色定义（与前端 js/auth.js 的判断保持一致，改动需同步）
+ROLE_ADMIN = '超级管理员'
+ROLE_SAFETY = '安全管理员'
+ROLE_VIEWER = '查看员'
+
+SESSION_TTL = 8 * 3600      # 会话有效期 8 小时
+CAPTCHA_TTL = 120           # 验证码有效期 2 分钟
+CAPTCHA_CHARS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'   # 去掉易混淆的 0/1/I/O
+
+# token → {'username', 'role', 'expire'}；进程内存存储，重启即失效
+SESSIONS = {}
+# captcha_id → (code, expire_ts)
+_CAPTCHA_STORE = {}
+
+# 免鉴权接口：登录与验证码
+PUBLIC_API = {'/api/login', '/api/captcha'}
+
+
+def hash_password(password: str, salt: str) -> str:
+    """加盐哈希，存储格式 salt$sha256(salt+password)，与 init_db.py 保持一致"""
+    return f'{salt}${hashlib.sha256((salt + password).encode("utf-8")).hexdigest()}'
+
+
+def verify_password(password: str, stored: str) -> bool:
+    if '$' in stored:
+        salt, _, digest = stored.partition('$')
+        return hmac.compare_digest(hash_password(password, salt).split('$', 1)[1], digest)
+    # 兼容 R8 之前写入的裸 sha256 记录
+    return hmac.compare_digest(hashlib.sha256(password.encode('utf-8')).hexdigest(), stored)
+
+
+def create_session(username: str, role: str) -> str:
+    token = secrets.token_hex(16)
+    SESSIONS[token] = {'username': username, 'role': role, 'expire': time.time() + SESSION_TTL}
+    return token
+
+
+def read_session(request: Request):
+    """从 Authorization: Bearer <token> 取出会话，过期即作废"""
+    auth = request.headers.get('authorization', '')
+    token = auth[7:].strip() if auth.lower().startswith('bearer ') else ''
+    sess = SESSIONS.get(token)
+    if not sess:
+        return None
+    if sess['expire'] < time.time():
+        SESSIONS.pop(token, None)
+        return None
+    return sess
+
+
+def allowed_roles(method: str, path: str):
+    """接口允许的角色；返回 None 表示所有已登录角色可用"""
+    if path in ('/api/logout', '/api/me'):
+        return None
+    if method == 'GET':
+        if path.startswith('/api/devices'):
+            return [ROLE_ADMIN]                    # 设备台账仅超管可见
+        if path.startswith('/api/evidences'):
+            return [ROLE_ADMIN, ROLE_SAFETY]       # 取证查看
+        return None                                # 监控与告警列表：三角色只读可见
+    if path.startswith('/api/alarms'):
+        return [ROLE_ADMIN, ROLE_SAFETY]           # 告警处理/驳回：查看员不可写
+    if path.startswith('/api/devices'):
+        return [ROLE_ADMIN]
+    return [ROLE_ADMIN]
+
+
+def gen_captcha():
+    """生成 4 位图形验证码，返回 (captcha_id, data_url)"""
+    from PIL import ImageDraw, ImageFont
+    code = ''.join(random.choice(CAPTCHA_CHARS) for _ in range(4))
+    width, height = 120, 40
+    img = Image.new('RGB', (width, height), (245, 247, 250))
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.truetype('arial.ttf', 26)
+    except Exception:
+        font = ImageFont.load_default()
+    # 干扰线，降低机器识别成功率即可，不追求强度
+    for _ in range(4):
+        draw.line(
+            [(random.randint(0, width), random.randint(0, height)),
+             (random.randint(0, width), random.randint(0, height))],
+            fill=(205, 210, 220), width=1
+        )
+    for i, ch in enumerate(code):
+        draw.text((12 + i * 26, random.randint(2, 8)), ch, font=font, fill=(37, 99, 235))
+
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    captcha_id = secrets.token_hex(8)
+    _CAPTCHA_STORE[captcha_id] = (code, time.time() + CAPTCHA_TTL)
+    return captcha_id, 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
+
+
+def check_captcha(captcha_id: str, captcha: str):
+    """验证码一次性使用，校验后立即失效"""
+    item = _CAPTCHA_STORE.pop(captcha_id, None)
+    if not item or item[1] < time.time() or item[0] != (captcha or '').strip().upper():
+        raise HTTPException(status_code=400, detail='验证码错误或已过期')
+
+
+@app.middleware('http')
+async def auth_middleware(request: Request, call_next):
+    """静态资源与登录/验证码接口放行，其余 /api/* 需登录；写接口再按角色二次校验"""
+    path = request.url.path
+    if not path.startswith('/api/') or path in PUBLIC_API:
+        return await call_next(request)
+
+    sess = read_session(request)
+    if not sess:
+        return JSONResponse({'status': 'error', 'message': '未登录或登录已过期'}, status_code=401)
+
+    roles = allowed_roles(request.method, path)
+    if roles and sess['role'] not in roles:
+        return JSONResponse({'status': 'error', 'message': '当前角色无权执行该操作'}, status_code=403)
+
+    request.state.user = sess
+    return await call_next(request)
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
+    password: str = Field(..., min_length=1, max_length=64)
+    captcha_id: str = ''
+    captcha: str = ''
+
+
+@app.get('/api/captcha')
+def get_captcha():
+    captcha_id, image = gen_captcha()
+    return {'status': 'ok', 'captcha_id': captcha_id, 'image': image}
+
+
+@app.post('/api/login')
+def login(req: LoginRequest):
+    check_captcha(req.captcha_id, req.captcha)
+    rows = db.query('SELECT * FROM users WHERE username = %s', (req.username,))
+    if not rows or not verify_password(req.password, rows[0]['password_hash']):
+        raise HTTPException(status_code=401, detail='账号或密码错误')
+    user = rows[0]
+    token = create_session(user['username'], user['role'])
+    return {'status': 'ok', 'token': token, 'username': user['username'], 'role': user['role']}
+
+
+@app.post('/api/logout')
+def logout(request: Request):
+    auth = request.headers.get('authorization', '')
+    if auth.lower().startswith('bearer '):
+        SESSIONS.pop(auth[7:].strip(), None)
+    return {'status': 'ok'}
+
+
+@app.get('/api/me')
+def get_me(request: Request):
+    sess = read_session(request)
+    if not sess:
+        raise HTTPException(status_code=401, detail='未登录或登录已过期')
+    return {'status': 'ok', 'username': sess['username'], 'role': sess['role']}
 
 
 # ==================== 静态资源（必须放最后） ====================

@@ -1,4 +1,5 @@
 import hashlib
+import secrets
 
 import db
 
@@ -76,6 +77,40 @@ def migrate():
         print('[migrate] devices 表已补充 last_heartbeat 列')
 
 
+def migrate_users():
+    """R8：把 R8 之前写入的裸 sha256 密码升级为加盐哈希格式"""
+    legacy = hashlib.sha256('admin123'.encode('utf-8')).hexdigest()
+    rows = db.query("SELECT id, username, password_hash FROM users WHERE password_hash NOT LIKE '%$%'")
+    for row in rows:
+        # 只认种子账号 admin 的已知默认密码，用户自改过的密码无从推断明文，保持原样
+        if row['username'] == 'admin' and row['password_hash'] == legacy:
+            db.execute('UPDATE users SET password_hash = %s WHERE id = %s',
+                       (hash_password('admin123', secrets.token_hex(8)), row['id']))
+            print('[migrate] admin 密码已升级为加盐哈希')
+
+
+def hash_password(password, salt):
+    """加盐哈希，存储格式 salt$sha256(salt+password)，与 server.py 保持一致"""
+    return f'{salt}${hashlib.sha256((salt + password).encode("utf-8")).hexdigest()}'
+
+
+def seed_users():
+    """三种角色各一个演示账号（幂等，已存在则跳过）"""
+    accounts = [
+        ('admin', 'admin123', '超级管理员'),
+        ('safety', 'safety123', '安全管理员'),
+        ('viewer', 'viewer123', '查看员'),
+    ]
+    for username, password, role in accounts:
+        if db.query('SELECT id FROM users WHERE username = %s', (username,)):
+            continue
+        db.execute(
+            'INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)',
+            (username, hash_password(password, secrets.token_hex(8)), role)
+        )
+        print(f'[seed] 已创建演示账号 {username}（{role}）')
+
+
 def seed_devices():
     if db.query('SELECT id FROM devices LIMIT 1'):
         return
@@ -91,24 +126,14 @@ def seed_devices():
         )
 
 
-def seed_admin():
-    if db.query("SELECT id FROM users WHERE username = 'admin'"):
-        return
-    # 初始默认密码 admin123，正式使用请修改（R8 会接入加盐登录）
-    pwd_hash = hashlib.sha256('admin123'.encode('utf-8')).hexdigest()
-    db.execute(
-        'INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)',
-        ('admin', pwd_hash, '超级管理员')
-    )
-
-
 def init():
     db.ensure_database()
     for sql in SCHEMA_SQL:
         db.execute(sql)
     migrate()
+    migrate_users()
     seed_devices()
-    seed_admin()
+    seed_users()
 
 
 if __name__ == '__main__':

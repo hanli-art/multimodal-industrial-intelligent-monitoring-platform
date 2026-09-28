@@ -42,7 +42,7 @@ async function loadAlarms() {
   if (f.level) params.set('level', f.level);
   if (f.status) params.set('status', f.status);
 
-  const res = await fetch('/api/alarms?' + params.toString());
+  const res = await Auth.apiFetch('/api/alarms?' + params.toString());
   const data = await res.json();
   if (data.status !== 'ok') {
     document.getElementById('tbody').innerHTML =
@@ -69,7 +69,7 @@ function renderTable(items) {
     const snapshot = imgUrl
       ? `<img src="${imgUrl}" style="width:48px;height:36px;object-fit:cover;cursor:pointer;border-radius:2px;" onclick="previewImage('${imgUrl}')" alt="抓拍图">`
       : '<span style="font-size:12px;color:#9ca3af;">—</span>';
-    const ops = a.status === '待处理'
+    const ops = (a.status === '待处理' && Auth.can('alarm_handle'))
       ? '<div class="col-ops">' +
         `<button class="btn btn-sm btn-primary" onclick="openModal(${a.id}, '已处理')">标记已处理</button>` +
         `<button class="btn btn-sm" onclick="openModal(${a.id}, '已驳回')">驳回误报</button>` +
@@ -119,7 +119,7 @@ function closeModal() {
 async function confirmAction() {
   if (!currentAction) return;
   const remark = document.getElementById('modalRemark').value.trim();
-  const res = await fetch('/api/alarms/' + currentAction.alarmId, {
+  const res = await Auth.apiFetch('/api/alarms/' + currentAction.alarmId, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: currentAction.status, remark: remark }),

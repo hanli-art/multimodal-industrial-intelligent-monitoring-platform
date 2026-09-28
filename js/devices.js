@@ -19,7 +19,7 @@ let hbEnabled = true;
 
 /* ==================== 车间分组树 ==================== */
 async function loadWorkshops() {
-  const res = await fetch('/api/devices/workshops');
+  const res = await Auth.apiFetch('/api/devices/workshops');
   const data = await res.json();
   if (data.status !== 'ok') return;
 
@@ -54,7 +54,7 @@ async function loadDevices() {
   const online = document.getElementById('onlineFilter').value;
   if (online !== '') params.set('online', online);
 
-  const res = await fetch('/api/devices?' + params.toString());
+  const res = await Auth.apiFetch('/api/devices?' + params.toString());
   const data = await res.json();
   const tbody = document.getElementById('tbody');
 
@@ -134,7 +134,7 @@ async function saveForm() {
   if (!payload.name) { alert('请填写设备名称'); return; }
 
   const editing = currentDevice ? currentDevice.id : null;
-  const res = await fetch(editing ? '/api/devices/' + editing : '/api/devices', {
+  const res = await Auth.apiFetch(editing ? '/api/devices/' + editing : '/api/devices', {
     method: editing ? 'PUT' : 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -164,7 +164,7 @@ function closeDelete() {
 
 async function confirmDelete() {
   if (!deleteTarget) return;
-  const res = await fetch('/api/devices/' + deleteTarget, { method: 'DELETE' });
+  const res = await Auth.apiFetch('/api/devices/' + deleteTarget, { method: 'DELETE' });
   const data = await res.json();
   closeDelete();
   if (data.status === 'ok') {
@@ -178,7 +178,7 @@ async function confirmDelete() {
 async function refreshHeartbeatIds() {
   try {
     // 取未过滤全量列表，找出「基准在线」的设备去上报心跳
-    const res = await fetch('/api/devices');
+    const res = await Auth.apiFetch('/api/devices');
     const data = await res.json();
     if (data.status !== 'ok') return;
     heartbeatIds = data.items.filter(function (d) { return d.online_status == 1; })
@@ -190,7 +190,7 @@ async function refreshHeartbeatIds() {
 
 async function sendHeartbeats() {
   await Promise.all(heartbeatIds.map(function (id) {
-    return fetch('/api/devices/' + id + '/heartbeat', { method: 'POST' }).catch(function () {});
+    return Auth.apiFetch('/api/devices/' + id + '/heartbeat', { method: 'POST' }).catch(function () {});
   }));
 }
 

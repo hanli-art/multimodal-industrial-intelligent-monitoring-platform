@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-page-perm="device">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>设备管理 - 多模态工业智能监控平台</title>
   <link rel="stylesheet" href="./css/admin.css">
+  <script src="./js/auth.js"></script>
 </head>
 <body>
 
@@ -19,8 +20,13 @@
       <div class="menu-group">安全</div>
       <a href="./alarms.html">告警管理</a>
       <div class="menu-group">设备</div>
-      <a href="./devices.html" class="active">设备管理</a>
+      <a href="./devices.html" class="active" data-perm="device">设备管理</a>
     </nav>
+    <div class="admin-user">
+      <span class="admin-user-name" data-user-name>—</span>
+      <span data-user-role></span>
+      <a href="javascript:void(0)" data-logout>退出登录</a>
+    </div>
   </aside>
 
   <!-- 右侧内容 -->

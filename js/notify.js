@@ -114,7 +114,7 @@
   }
 
   function loadRecent() {
-    fetch('/api/alarms/recent?limit=10')
+    Auth.apiFetch('/api/alarms/recent?limit=10')
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (d.status === 'ok') renderTicker(d.items || []);

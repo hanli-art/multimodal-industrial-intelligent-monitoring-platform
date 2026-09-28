@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 - 多模态工业智能监控平台</title>
+  <link rel="stylesheet" href="./css/admin.css">
+</head>
+<body class="login-body">
+
+<div class="login-wrap">
+  <form class="login-card" id="loginForm" autocomplete="off">
+    <div class="login-brand">
+      <span class="login-logo">⬢</span>
+      <h1>多模态工业智能监控平台</h1>
+      <p>安全生产 · 智能识别 · 违规取证</p>
+    </div>
+
+    <div class="login-field">
+      <label for="username">账号</label>
+      <input type="text" id="username" placeholder="请输入账号" autocomplete="username">
+    </div>
+
+    <div class="login-field">
+      <label for="password">密码</label>
+      <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password">
+    </div>
+
+    <div class="login-field">
+      <label for="captcha">验证码</label>
+      <div class="captcha-row">
+        <input type="text" id="captcha" maxlength="4" placeholder="不区分大小写">
+        <img id="captchaImg" alt="点击刷新验证码" title="点击刷新">
+      </div>
+    </div>
+
+    <p class="login-err" id="loginErr"></p>
+
+    <button type="submit" class="btn btn-primary login-btn" id="btnLogin">登 录</button>
+
+    <div class="login-tip">
+      演示账号：admin / admin123（超级管理员）<br>
+      safety / safety123（安全管理员）　viewer / viewer123（查看员）
+    </div>
+  </form>
+</div>
+
+<script src="./js/auth.js"></script>
+<script src="./js/login.js"></script>
+</body>
+</html>
