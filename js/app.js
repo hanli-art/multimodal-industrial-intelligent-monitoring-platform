@@ -14,9 +14,11 @@ let fpsCounter = 0, fpsStamp = performance.now();
 let isPlaying = false, detecting = false, detectTimer = null;
 let realDetections = [];
 let lastPersonCnt = 0, lastVehicleCnt = 0;
+let detectInflight = false, detectSentAt = 0;   // 背压标记：上一帧结果未返回时不再发新帧
 
 const DETECT_INTERVAL   = 200;
-const QWEN_INTERVAL     = 10000;
+const DETECT_TIMEOUT    = 5000;   // 单帧结果最长等待，超时视为丢失并恢复发送
+const QWEN_INTERVAL     = 5000;
 const SEND_MAX_WIDTH    = 960;
 const SEND_JPEG_QUALITY = 0.75;
 
@@ -76,6 +78,7 @@ function initWebSocket() {
   };
 
   ws.onmessage = (event) => {
+    detectInflight = false;   // 成功或失败都释放，否则丢帧会永久停发
     let data; try { data = JSON.parse(event.data); } catch(e) { return; }
     if (data.status !== 'ok') return;
     realDetections = data.detections || [];
@@ -85,6 +88,7 @@ function initWebSocket() {
 
   ws.onclose = () => {
     wsReady = false;
+    detectInflight = false;
     const b = document.getElementById('wsBadge');
     if (b) { b.textContent = 'OFFLINE'; b.classList.remove('online'); }
     setTimeout(initWebSocket, 3000);
@@ -113,8 +117,19 @@ function startDetectLoop() {
   detectTimer = setInterval(() => {
     if (!detecting || !wsReady || !isPlaying) return;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    // 背压：上一帧结果未返回就丢弃本帧，避免帧堆积导致画框越来越滞后于画面
+    if (detectInflight) {
+      if (Date.now() - detectSentAt < DETECT_TIMEOUT) return;
+      detectInflight = false;   // 结果超时丢失，自救恢复发送
+    }
     const frame = grabFrame();
-    if (frame) { try { ws.send(JSON.stringify({ base64_image: frame })); } catch(e){} }
+    if (frame) {
+      try {
+        ws.send(JSON.stringify({ base64_image: frame }));
+        detectInflight = true;
+        detectSentAt = Date.now();
+      } catch(e) { detectInflight = false; }
+    }
   }, DETECT_INTERVAL);
 }
 
@@ -440,6 +455,7 @@ async function startCamera() {
 async function stopAll() {
   isPlaying = false; detecting = false;
   stopDetectLoop();
+  detectInflight = false;
   realDetections = [];
   updateStats([]);
   updatePlayButton();
@@ -469,6 +485,7 @@ function toggleDetect() {
     addLog('已开启实时目标检测', 'ok');
   } else {
     stopDetectLoop();
+    detectInflight = false;
     realDetections = []; updateStats([]);
     if (btn) btn.textContent = '开始检测';
     if (status) status.textContent = 'STANDBY';

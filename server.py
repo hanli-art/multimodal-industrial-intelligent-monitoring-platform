@@ -159,13 +159,6 @@ def run_yolo(frame, conf=0.5):
                 'conf': conf, 'class_name': class_name
             })
 
-    car_cnt    = sum(1 for d in detections if d['class_name'] == 'car')
-    truck_cnt  = sum(1 for d in detections if d['class_name'] == 'truck')
-    person_cnt = sum(1 for d in detections if d['class_name'] == 'person')
-    vehicle_cnt = car_cnt + truck_cnt
-    ts = time.strftime('%H:%M:%S')
-    print(f'[{ts}] 车辆 = {vehicle_cnt} (car={car_cnt}, truck={truck_cnt}) | 行人 = {person_cnt} | 总目标 = {len(detections)}')
-
     return detections
 
 
@@ -444,25 +437,37 @@ async def websocket_qwen(websocket: WebSocket):
                 await websocket.send_json({'status': 'error', 'message': f'千问调用失败: {e}'})
                 continue
 
-            # 简单解析：根据关键词判断风险等级
-            risk_level = '低'
-            if any(k in result_text for k in ['火灾', '打架', '斗殴']):
-                risk_level = '高'
-            elif any(k in result_text for k in ['抽烟', '未戴安全帽', '爬墙', '攀爬']):
-                risk_level = '中'
+            # 千问把结论写在首行，"说明："之后是解释性文字，常含"无打架斗殴""未戴安全帽"
+            # 这类否定描述；只拿结论行做匹配，否则会把否定句误判成违规
+            head = result_text.split('说明', 1)[0]
+            verdict = ''
+            for line in head.splitlines():
+                line = line.strip().strip('-').strip()
+                if line:
+                    verdict = line
+                    break
+            negated = any(k in verdict for k in ('无违规', '未检测到', '未发现', '无异常'))
 
             # 提取违规项（用于前端展示）
             violations = []
-            if '抽烟' in result_text:
-                violations.append('抽烟')
-            if '未戴安全帽' in result_text:
-                violations.append('未戴安全帽')
-            if '打架' in result_text or '斗殴' in result_text:
-                violations.append('打架斗殴')
-            if '火灾' in result_text or '火苗' in result_text:
-                violations.append('火灾')
-            if '爬墙' in result_text or '攀爬' in result_text:
-                violations.append('攀爬围墙')
+            if verdict and not negated:
+                if '抽烟' in verdict:
+                    violations.append('抽烟')
+                if '未戴安全帽' in verdict:
+                    violations.append('未戴安全帽')
+                if '打架' in verdict or '斗殴' in verdict:
+                    violations.append('打架斗殴')
+                if '火灾' in verdict or '火苗' in verdict:
+                    violations.append('火灾')
+                if '爬墙' in verdict or '攀爬' in verdict:
+                    violations.append('攀爬围墙')
+
+            # 风险等级同样只依据结论行
+            risk_level = '低'
+            if '火灾' in verdict or '打架' in verdict or '斗殴' in verdict:
+                risk_level = '高'
+            elif '抽烟' in verdict or '未戴安全帽' in verdict or '爬墙' in verdict or '攀爬' in verdict:
+                risk_level = '中'
 
             # 按系统配置剔除已关闭的违规类型：关掉后既不告警也不前端提示
             enabled = enabled_violations(cfg)
