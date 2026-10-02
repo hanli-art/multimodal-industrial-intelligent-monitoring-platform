@@ -15,6 +15,7 @@ let isPlaying = false, detecting = false, detectTimer = null;
 let realDetections = [];
 let lastPersonCnt = 0, lastVehicleCnt = 0;
 let detectInflight = false, detectSentAt = 0;   // 背压标记：上一帧结果未返回时不再发新帧
+let lastSendW = 0;                              // 最近一帧送检图的宽度，用于把框坐标换算回视频原始尺寸
 
 const DETECT_INTERVAL   = 200;
 const DETECT_TIMEOUT    = 5000;   // 单帧结果最长等待，超时视为丢失并恢复发送
@@ -61,6 +62,7 @@ function grabFrame() {
     sendCanvas.width = w; sendCanvas.height = h;
   }
   sendCtx.drawImage(rawCanvas, 0, 0, w, h);
+  lastSendW = w;   // 记住送检尺寸，画框时按比例还原
   return sendCanvas.toDataURL('image/jpeg', SEND_JPEG_QUALITY);
 }
 
@@ -339,8 +341,14 @@ function drawDetections() {
   if (!ctx || !canvas.width) return;
   const scale = Math.max(2, canvas.width / 700);
   const fontSize = Math.max(13, canvas.width / 65);
+  // 后端在送检图（最宽 960）上推理，返回的是送检图坐标系；画布是视频原始尺寸，必须换算
+  const k = lastSendW ? canvas.width / lastSendW : 1;
 
-  realDetections.forEach(d => {
+  realDetections.forEach(item => {
+    const d = {
+      x1: item.x1 * k, y1: item.y1 * k, x2: item.x2 * k, y2: item.y2 * k,
+      conf: item.conf, class_name: item.class_name
+    };
     const color = CLASS_COLORS[d.class_name] || CLASS_COLORS.default;
     const w = d.x2 - d.x1, h = d.y2 - d.y1;
     ctx.strokeStyle = color; ctx.lineWidth = scale;

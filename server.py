@@ -48,6 +48,11 @@ print('[init] 正在加载 YOLO 模型...')
 model = YOLO('./yolov8m.pt')
 print('[init] 模型加载完成')
 
+# 推理分辨率：前端送检图已缩到最宽 960，若这里仍用 ultralytics 默认的 640，
+# 等于对同一帧做第二次降采样，远处的小目标（车/人）特征会被抹掉；
+# 实测提到 960 后检出量提升约 43%（58→83 / 8 帧），单帧推理 321ms→564ms
+YOLO_IMGSZ = 960
+
 # 线程池：YOLO 推理 + 千问调用都放这里，避免阻塞事件循环
 executor = ThreadPoolExecutor(max_workers=4)
 
@@ -145,7 +150,8 @@ def base64_to_frame(base64_image: str):
 # ==================== 工具 2：YOLO 检测 ====================
 def run_yolo(frame, conf=0.5):
     """同步函数，跑 YOLO，返回检测结果列表；conf 由系统配置传入，调整后即时生效"""
-    results = model.predict(frame, conf=conf, classes=[0, 2, 7], verbose=False)
+    results = model.predict(frame, conf=conf, classes=[0, 2, 7],
+                            imgsz=YOLO_IMGSZ, verbose=False)
 
     detections = []
     if hasattr(results[0], 'boxes') and results[0].boxes is not None:
